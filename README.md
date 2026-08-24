@@ -1,6 +1,6 @@
 # EdgeAI-Robotic-Arm-Control
 
-High-Performance Real-Time Edge-AI Visual Servoing & Robotic Arm Closed-Loop Control System on RK3588 (6 TOPS NPU).
+基于 RK3588 (6 TOPS NPU) 的高性能实时端侧视觉伺服与机械臂闭环控制系统。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-RK3588%20%7C%20Linux%20Ubuntu%2022.04-orange.svg)](https://github.com/kimkingyu/EdgeAI-Robotic-Arm-Control)
@@ -9,111 +9,111 @@ High-Performance Real-Time Edge-AI Visual Servoing & Robotic Arm Closed-Loop Con
 
 ---
 
-## 📌 Overview
+## 📌 项目概述
 
-**EdgeAI-Robotic-Arm-Control** is an industrial-grade, end-to-end visual servoing and robotic arm motion control pipeline specifically engineered for the **Rockchip RK3588** edge computing platform.
+**EdgeAI-Robotic-Arm-Control** 是一套专为 **瑞芯微 RK3588** 边缘计算芯片设计的高性能、全流程端侧视觉伺服与机器人闭环控制系统。
 
-By coupling hardware-accelerated NPU inference, V4L2 zero-copy memory mapping, and a decoupled asynchronous multi-threaded pipeline, this system achieves **50+ FPS** real-time closed-loop object tracking and trajectory planning with sub-millimeter positioning repeatability.
+项目结合了 NPU 硬件加速推理、V4L2 零拷贝图像采集机制，以及三级解耦的异步多线程流水线，在 RK3588 边缘端实现了 **50+ FPS** 的高频目标检测、空间位姿映射与机械臂逆运动学（IK）闭环控制，定位误差优于 3mm。
 
 ```text
-[USB/MIPI Camera (1080P)] 
-            │ (V4L2 Zero-Copy Stream)
+[USB/MIPI 摄像头 (1080P)] 
+            │ (V4L2 零拷贝采集)
             ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        RK3588 C++ Core Pipeline                        │
+│                        RK3588 C++ 核心控制流水线                        │
 │                                                                        │
-│  [Pre-Processing] ──► [Lock-Free Safe Queue]                           │
+│  [图像预处理] ──► [线程安全阻塞队列 SafeQueue]                          │
 │                             │                                          │
 │                             ▼                                          │
-│                    [RKNN NPU Inference] (YOLOv8 INT8, <11ms)           │
+│                    [RKNN NPU 硬件推理] (YOLOv8 INT8 量化, <11ms)       │
 │                             │                                          │
 │                             ▼                                          │
-│                    [PnP Spatial Mapping] (Eye-to-Hand Transform)       │
+│                    [PnP 空间位姿解算] (手眼标定 Eye-to-Hand 映射)       │
 │                             │                                          │
 │                             ▼                                          │
-│                    [Inverse Kinematics (IK)] ──► [UART/ROS2 Servo Bus] │
+│                    [机械臂逆运动学求解 (IK)] ──► [串口/ROS2 驱动总线]   │
 └────────────────────────────────────────────────────────────────────────┘
             │
             ▼
-[Robotic Arm / Gazebo Simulation] (Real-time Closed-Loop Visual Servoing)
+[实体机械臂 / Gazebo 仿真环境] (实时闭环视觉伺服对准与抓取)
 ```
 
 ---
 
-## 🚀 Key Features
+## 🚀 核心特性
 
-- **NPU Acceleration & INT8 Quantization**: YOLO target detection quantized with `RKNN-Toolkit2` (W8A8 PTQ with KL-divergence calibration), delivering **<11ms** inference latency on RK3588 NPU.
-- **Asynchronous Multi-Thread Pipeline**: 3-stage decoupled architecture (Capture -> NPU Inference -> Coordinate Mapping & Kinematics) with thread-safe lock-free queues, eliminating I/O bottlenecks.
-- **Eye-to-Hand Calibration & PnP Solving**: Precise spatial mapping from 2D pixel coordinates $(u, v)$ to 3D robot base coordinate $(X_{base}, Y_{base}, Z_{base})$.
-- **Closed-Loop Motion Control**: Lightweight C++ analytical/geometric Inverse Kinematics (IK) engine with serial/ROS2 motor bus driver.
-- **Hardware-in-the-Loop (HIL) Simulation**: Full integration with ROS2 Humble and Gazebo digital twin environment.
+- **NPU 硬件加速与 INT8 量化**：基于 `RKNN-Toolkit2` 对目标检测模型实施非对称训练后量化（PTQ）与 KL 散度校准，在 RK3588 NPU 上实现单帧 **<11ms** 的低时延推理，模型体积缩减 70%+。
+- **异步多线程流水线**：设计“图像采集 - NPU 推理 - 空间映射与逆解”三级解耦架构，结合线程安全队列彻底消除 I/O 阻塞等待。
+- **手眼标定与 PnP 空间解算**：基于 Eye-to-Hand 架构与 PnP 算法，实现目标从 2D 像素坐标 $(u, v)$ 向机械臂基座 3D 坐标 $(X_{base}, Y_{base}, Z_{base})$ 的毫米级空间映射。
+- **轻量化运动学闭环**：纯 C++ 实现几何/解析法逆运动学（IK）求解，毫秒级计算关节伺服角度并经由串口 UART / ROS2 发布执行。
+- **硬件在环（HIL）与数字孪生**：原生适配 ROS2 (Humble) 与 Gazebo 物理仿真环境。
 
 ---
 
-## 📊 Benchmark & Performance
+## 📊 性能基准测试 (Benchmark)
 
-Tested on **Orange Pi 5 (RK3588S, 16GB RAM)** under Ubuntu 22.04 LTS:
+测试平台：**香橙派 Orange Pi 5 (RK3588S, 16GB 内存)** / Ubuntu 22.04 LTS
 
-| Stage | Single-Thread Latency | Multi-Thread Optimized | CPU / NPU Load |
+| 流水线阶段 | 单线程耗时 | 多线程流水线优化后 | 资源占用 / 负载 |
 | :--- | :--- | :--- | :--- |
-| **Image Acquisition (1080P)** | 12.5 ms | **0.5 ms** (DMA-BUF) | CPU < 5% |
-| **NPU Inference (YOLOv8 INT8)** | 11.2 ms | **10.5 ms** | NPU ~60% |
-| **PnP & Coordinate Transform** | 0.4 ms | **0.3 ms** | CPU < 1% |
-| **Inverse Kinematics (IK)** | 0.2 ms | **0.2 ms** | CPU < 1% |
-| **Total Closed-Loop Latency** | 28.5 ms | **< 15.0 ms** | Precision < 3mm |
-| **End-to-End Throughput (FPS)** | ~22 FPS | **55+ FPS** | System Temp < 52°C |
+| **图像采集 (1080P)** | 12.5 ms | **0.5 ms** (DMA-BUF 零拷贝) | CPU < 5% |
+| **NPU 推理 (YOLOv8 INT8)** | 11.2 ms | **10.5 ms** | NPU 负载 ~60% |
+| **PnP 位姿与空间映射** | 0.4 ms | **0.3 ms** | CPU < 1% |
+| **逆运动学求解 (IK)** | 0.2 ms | **0.2 ms** | CPU < 1% |
+| **闭环端到端控制时延** | 28.5 ms | **< 15.0 ms** | 跟踪定位精度 < 3mm |
+| **系统吞吐量 (FPS)** | ~22 FPS | **55+ FPS** | 芯片工作温度 < 52°C |
 
 ---
 
-## 📂 Project Structure
+## 📂 项目结构
 
 ```text
 EdgeAI-Robotic-Arm-Control/
-├── CMakeLists.txt             # Modern CMake Build System
-├── README.md                  # Project Documentation
-├── LICENSE                    # MIT License
+├── CMakeLists.txt             # CMake 编译构建配置
+├── README.md                  # 项目中文说明文档
+├── LICENSE                    # MIT 开源协议
 ├── .gitignore
 │
-├── include/                   # Header Files
-│   ├── safe_queue.hpp         # Thread-Safe Blocking Queue
-│   ├── camera_v4l2.hpp        # V4L2 Low-Latency Camera Driver
-│   ├── rknn_detector.hpp      # RK3588 NPU Inference Engine
-│   ├── hand_eye_trans.hpp     # Eye-to-Hand & PnP Spatial Solver
-│   └── kinematics.hpp         # Robot Forward & Inverse Kinematics
+├── include/                   # 核心头文件
+│   ├── safe_queue.hpp         # 生产级线程安全阻塞队列
+│   ├── camera_v4l2.hpp        # V4L2 低时延摄像头采集驱动
+│   ├── rknn_detector.hpp      # RK3588 NPU 推理引擎封装
+│   ├── hand_eye_trans.hpp     # 手眼标定与 PnP 空间转换解算器
+│   └── kinematics.hpp         # 机械臂正逆运动学解算器
 │
-├── src/                       # Source Code
-│   └── main.cpp               # Multi-Thread Pipeline Entry Point
+├── src/                       # 核心实现源码
+│   └── main.cpp               # 三级流水线调度主程序入口
 │
-├── model/                     # Model Quantization & Conversion
-│   └── convert_rknn.py        # ONNX -> RKNN INT8 Conversion Script
+├── model/                     # 模型转换与量化工具
+│   └── convert_rknn.py        # ONNX 转换为 RKNN INT8 模型的 Python 脚本
 │
-└── scripts/                   # Build & Run Automation
-    ├── build.sh               # One-click Build Script
-    └── run.sh                 # One-click Execution Script
+└── scripts/                   # 一键自动化脚本
+    ├── build.sh               # 一键编译脚本
+    └── run.sh                 # 一键运行脚本
 ```
 
 ---
 
-## 🛠️ Tech Stack & Prerequisites
+## 🛠️ 环境依赖与技术栈
 
-- **Host Environment**: Linux Ubuntu 20.04/22.04 or aarch64 RK3588 Board
-- **Core Compiler**: GCC/G++ (>= 9.4.0, C++17 Standard), CMake (>= 3.16)
-- **AI Runtime**: Rockchip `librknnrt.so` (RKNPU2 v1.6.0+), `rknn-toolkit2`
-- **Dependencies**: OpenCV 4.x, POSIX Threads (`pthread`)
-- **Robot Interface**: ROS2 (Humble) / Serial UART
+- **运行平台**：RK3588 / RK3588S 开发板（Ubuntu 20.04 / 22.04 aarch64）或 x86 Linux
+- **编译工具**：GCC/G++ (>= 9.4.0, C++17 标准), CMake (>= 3.16)
+- **AI 运行时**：瑞芯微 `librknnrt.so` (RKNPU2 v1.6.0+), `rknn-toolkit2`
+- **基础库**：OpenCV 4.x, POSIX 线程库 (`pthread`)
+- **机器人接口**：ROS2 (Humble) / 串口通信协议 (UART)
 
 ---
 
-## ⚡ Quick Start
+## ⚡ 快速开始
 
-### 1. Model Quantization (on Host PC)
+### 1. 模型量化与转换（PC 端运行）
 ```bash
-# Install rknn-toolkit2 and convert ONNX model to RKNN INT8
+# 安装 rknn-toolkit2 环境，将 ONNX 导出为 RKNN INT8 模型
 cd model
 python3 convert_rknn.py --onnx yolov8n.onnx --output yolov8n_int8.rknn --target rk3588
 ```
 
-### 2. Build on RK3588 Board
+### 2. 板端编译
 ```bash
 git clone https://github.com/kimkingyu/EdgeAI-Robotic-Arm-Control.git
 cd EdgeAI-Robotic-Arm-Control
@@ -121,17 +121,17 @@ chmod +x scripts/*.sh
 ./scripts/build.sh
 ```
 
-### 3. Run Pipeline
+### 3. 运行控制流水线
 ```bash
 ./scripts/run.sh
 ```
 
 ---
 
-## 📄 License
+## 📄 开源协议
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+本项目基于 [MIT License](LICENSE) 开源协议。
 
 ---
-**Author**: [kimkingyu](https://github.com/kimkingyu)  
-**Affiliation**: College of Mechanical Engineering, Zhejiang University
+**开发者**: [kimkingyu](https://github.com/kimkingyu)  
+**学校/单位**: 浙江大学机械工程学院 (College of Mechanical Engineering, Zhejiang University)
