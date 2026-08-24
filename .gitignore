@@ -1,0 +1,35 @@
+# Build & Artifacts
+build/
+bin/
+lib/
+*.o
+*.so
+*.a
+*.dylib
+*.dll
+*.exe
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+compile_commands.json
+
+# Logs & Temporary Files
+*.log
+*.tmp
+temp/
+
+# Large Model Weights (>50MB)
+model/*.onnx
+model/*.pt
+model/*.engine
+
+# Dataset & Videos
+*.mp4
+*.avi
+*.mkv
+dataset/
+calib_images/
