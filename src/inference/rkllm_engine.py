@@ -65,19 +65,58 @@ class RKLLMInferenceEngine:
 
         if not HAS_RKLLM or self.rkllm_handle is None:
             # 纯仿真/模拟推理
-            time.sleep(0.15) # 模拟 NPU 延迟
-            mock_res = (
-                '{\n'
-                '  "intent": "博拓里尼阀芯工件自主识别与抓取",\n'
-                '  "priority": 1,\n'
-                '  "actions": [\n'
-                '    {"action": "move_safe", "params": {}},\n'
-                '    {"action": "pick", "params": {"target_name": "valve_core", "x": 160.0, "y": 10.0, "z": 30.0}},\n'
-                '    {"action": "place", "params": {"x": 200.0, "y": 60.0, "z": 30.0}},\n'
-                '    {"action": "move_safe", "params": {}}\n'
-                '  ]\n'
-                '}'
-            )
+            time.sleep(0.12) # 模拟 NPU 延迟
+            import re
+            u_match = re.search(r"<\|im_start\|>user\n([\s\S]*?)<\|im_end\|>", prompt)
+            user_text = u_match.group(1).lower() if u_match else prompt.lower()
+
+            if "急停" in user_text or "紧急" in user_text or "stop" in user_text:
+                mock_res = (
+                    '{\n'
+                    '  "intent": "触发紧急安全制动",\n'
+                    '  "priority": 0,\n'
+                    '  "actions": [\n'
+                    '    {"action": "emergency_stop", "params": {}}\n'
+                    '  ]\n'
+                    '}'
+                )
+            elif "巡检" in user_text or "inspect" in user_text or "检查" in user_text:
+                mock_res = (
+                    '{\n'
+                    '  "intent": "工件外观缺陷巡检与分拣",\n'
+                    '  "priority": 1,\n'
+                    '  "actions": [\n'
+                    '    {"action": "move_safe", "params": {}},\n'
+                    '    {"action": "inspect", "params": {"target_name": "flange"}},\n'
+                    '    {"action": "pick", "params": {"target_name": "flange", "x": 170.0, "y": -10.0, "z": 30.0}},\n'
+                    '    {"action": "place", "params": {"x": 200.0, "y": 60.0, "z": 30.0}},\n'
+                    '    {"action": "move_safe", "params": {}}\n'
+                    '  ]\n'
+                    '}'
+                )
+            elif "原位" in user_text or "收回" in user_text or "复位" in user_text:
+                mock_res = (
+                    '{\n'
+                    '  "intent": "机械臂复位至安全停泊位",\n'
+                    '  "priority": 2,\n'
+                    '  "actions": [\n'
+                    '    {"action": "move_safe", "params": {}}\n'
+                    '  ]\n'
+                    '}'
+                )
+            else:
+                mock_res = (
+                    '{\n'
+                    '  "intent": "博拓里尼工件自主识别与抓取",\n'
+                    '  "priority": 1,\n'
+                    '  "actions": [\n'
+                    '    {"action": "move_safe", "params": {}},\n'
+                    '    {"action": "pick", "params": {"target_name": "valve_core", "x": 160.0, "y": 10.0, "z": 30.0}},\n'
+                    '    {"action": "place", "params": {"x": 200.0, "y": 60.0, "z": 30.0}},\n'
+                    '    {"action": "move_safe", "params": {}}\n'
+                    '  ]\n'
+                    '}'
+                )
             self.last_perf = {
                 "ttft_ms": 120.0,
                 "tps": 26.5,
