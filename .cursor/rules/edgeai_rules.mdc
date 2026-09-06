@@ -1,0 +1,18 @@
+---
+description: EdgeAI 机械臂项目工程规范、调试流程与自动追踪约束
+globs: ["**/*.cpp", "**/*.hpp", "**/*.py", "CMakeLists.txt", "scripts/*.sh"]
+alwaysApply: true
+---
+
+# EdgeAI-Robotic-Arm-Control 智能体行为规则
+
+## 1. 架构原则
+- **3-DOF 机械臂与 RK3588 NPU 专用**：任何运动学推导与算子量化必须严格对齐 3 自由度连杆尺寸与 RK3588 aarch64 硬件架构。
+- **三级解耦设计**：采集、NPU 推理、控制三线程必须通过 `SafeQueue` 异步流转，杜绝主循环单线程阻塞。
+- **优雅降级**：所有硬件接口（相机、I2C 舵机板、NPU 运行时）在硬件未物理连接时必须自动降级为 Mock/合成模式，不可直接崩溃退出。
+
+## 2. 变更追踪铁律 (Dev Tracker)
+任何功能实现、编译排错或参数变更完成后：
+- 必须明确说明：【改了哪里 (How)】与【为什么改 (Why)】。
+- 必须调用 `edgeai-arm-dev-tracker` 更新 `docs/dev_logs/DEV_PROGRESS_JOURNAL.md`。
+- 绝不允许“默默改代码而不留痕迹”。

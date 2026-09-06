@@ -36,7 +36,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
 # Main executable
 add_executable(edge_arm_control
-    src/main.cpp
+    src/main.cpp src/kinematics.cpp
 )
 
 target_link_libraries(edge_arm_control

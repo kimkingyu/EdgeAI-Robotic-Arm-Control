@@ -1,35 +1,31 @@
-# Build & Artifacts
-build/
-bin/
-lib/
-*.o
+.narrafork/
+.worktrees/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 *.so
-*.a
-*.dylib
-*.dll
-*.exe
+.env
+venv/
+env/
+.venv/
 
-# IDE & Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-compile_commands.json
+# Models & Weights (large binaries)
+*.rknn
+*.onnx
+*.engine
+*.pt
+*.pth
+weights/
+models/*.rknn
 
-# Logs & Temporary Files
+# Data & Logs
+logs/
+data/
 *.log
-*.tmp
-temp/
+recordings/
 
-# Large Model Weights (>50MB)
-model/*.onnx
-model/*.pt
-model/*.engine
+# User manuals / Large docs
+*.pdf
 
-# Dataset & Videos
-*.mp4
-*.avi
-*.mkv
-dataset/
-calib_images/

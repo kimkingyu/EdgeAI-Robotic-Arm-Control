@@ -1,0 +1,6 @@
+# Core Dependencies for RK3588 (aarch64) EdgeAI Robotic Arm
+numpy>=1.20.0
+opencv-python>=4.5.0
+pyserial>=3.5
+pyyaml>=6.0
+# Note: rknn-toolkit-lite2 wheel should be installed manually based on python version (cp38/cp310/cp311)

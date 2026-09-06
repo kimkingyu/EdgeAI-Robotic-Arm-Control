@@ -1,0 +1,72 @@
+# ==============================================================================
+# 博拓里尼工业自动化项目: 端侧 AI 任务规划与多轴机械臂闭环控制系统配置
+# ==============================================================================
+
+project:
+  name: "EdgeAI-Robotic-Arm-Control"
+  client: "博拓里尼股份有限公司 (Bottarini)"
+  scenario: "面向离线自主决策的工业工件视觉质检与自适应分拣"
+
+# 1. 端侧大语言模型 (Qwen2.5) RKLLM 部署配置
+llm:
+  enabled: true
+  model_type: "qwen2.5"
+  model_path: "models/weights/qwen2.5_0.5b_w4a16.rkllm"
+  precision: "w4a16"           # "w4a16" (极限压缩) | "w8a16" | "fp16"
+  max_context_len: 1024
+  max_new_tokens: 256
+  temperature: 0.2             # 工业场景需低随机性，确保严格遵循 JSON 格式
+
+# 2. 工业视觉感知与 NPU 多核推理配置
+camera:
+  type: "usb"                  # "usb" | "mipi_csi" | "realsense"
+  device_id: 0                # /dev/video0
+  width: 640
+  height: 480
+  fps: 30
+
+vision:
+  model_path: "models/weights/yolov8n_int8.rknn"
+  target_size: [640, 640]
+  quant_method: "int8_kl"      # INT8 非对称量化 + KL 散度校准
+  core_mask: "all"             # "all" (3核并发 6 TOPS) | "core0" | "auto"
+  conf_threshold: 0.6
+  nms_threshold: 0.45
+  industrial_classes:
+    - "valve_core"             # 阀芯
+    - "flange"                 # 法兰
+    - "bearing"                # 轴承
+    - "defective_part"         # 缺陷品
+
+# 3. 机械臂与工控执行机构配置 (I2C / 总线)
+arm:
+  controller_type: "i2c"       # "i2c" (PCA9685) | "serial" (总线舵机) | "can" | "ros2"
+  
+  # I2C (PCA9685 16通道 12位 PWM) 配置
+  i2c:
+    bus: 7                     # OrangePi 5 Pro 40Pin I2C-7
+    address: 0x40              # PCA9685 默认地址
+    channels: [0, 1, 2, 3, 4, 5] # 关节 1~6 PWM 通道
+    gripper_channel: 6         # 夹爪舵机 PWM 通道
+
+  # 备用串口配置
+  serial:
+    port: "/dev/ttyUSB0"
+    baudrate: 115200
+    timeout: 0.5
+
+  dof: 6                       # 自由度
+  joint_limits:
+    - [-180, 180]
+    - [-90, 90]
+    - [-90, 90]
+    - [-180, 180]
+    - [-90, 90]
+    - [-180, 180]
+
+# 4. 手眼标定与运动学抓取控制流水线
+pipeline:
+  hand_eye_mode: "eye_to_hand" # "eye_to_hand" (固定机位) | "eye_in_hand" (末端机位)
+  safe_z_height: 150.0         # 移动过程安全抬升避障高度 (mm)
+  grasp_z_height: 30.0         # 抓取下探接触高度 (mm)
+  workspace_radius_max: 320.0  # 工作半径安全硬边界 (mm)

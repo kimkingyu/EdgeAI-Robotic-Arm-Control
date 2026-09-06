@@ -1,0 +1,135 @@
+import time
+import os
+from typing import Optional, Callable
+
+try:
+    from rkllm.api import RKLLM
+    HAS_RKLLM = True
+except ImportError:
+    HAS_RKLLM = False
+
+
+class RKLLMInferenceEngine:
+    """RK3588 板载端侧大模型 (Qwen) 推理加速引擎 (基于瑞芯微 RKLLM 运行时)"""
+
+    def __init__(self, model_path: str, max_context_len: int = 1024, max_new_tokens: int = 256):
+        self.model_path = model_path
+        self.max_context_len = max_context_len
+        self.max_new_tokens = max_new_tokens
+        self.rkllm_handle = None
+        self.is_ready = False
+        self.last_perf = {
+            "ttft_ms": 0.0,       # 首 Token 时延 (Prefill)
+            "tps": 0.0,           # 每秒生成 Token 吞吐 (Decode)
+            "total_tokens": 0,
+            "total_time_s": 0.0
+        }
+
+    def load_model(self) -> bool:
+        """加载经过 W4A16 量化后的 .rkllm 格式大模型"""
+        if not HAS_RKLLM:
+            print(f"[RKLLM] 提示: 当前系统未安装 rkllm 运行时，将以轻量 Mock 模式运行")
+            self.is_ready = True
+            return True
+
+        if not os.path.exists(self.model_path):
+            print(f"[RKLLM] 错误: 模型文件不存在 -> {self.model_path}")
+            return False
+
+        print(f"[RKLLM] 正在将大模型加载至 RK3588 NPU (6 TOPS)...")
+        start_t = time.time()
+        try:
+            self.rkllm_handle = RKLLM()
+            ret = self.rkllm_handle.init(
+                model_path=self.model_path,
+                max_context_len=self.max_context_len,
+                max_new_tokens=self.max_new_tokens
+            )
+            if ret != 0:
+                print(f"[RKLLM] 模型初始化失败，错误码: {ret}")
+                return False
+
+            load_time = time.time() - start_t
+            self.is_ready = True
+            print(f"[RKLLM] 大模型加载成功！耗时: {load_time:.2f}s, 最大上下文: {self.max_context_len}")
+            return True
+        except Exception as e:
+            print(f"[RKLLM] 初始化异常: {e}")
+            return False
+
+    def generate(self, prompt: str, callback: Optional[Callable[[str], None]] = None) -> str:
+        """执行流式/阻塞端侧推理，并统计 TTFT 与吞吐性能"""
+        if not self.is_ready:
+            print("[RKLLM] 错误: 模型尚未就绪")
+            return ""
+
+        if not HAS_RKLLM or self.rkllm_handle is None:
+            # 纯仿真/模拟推理
+            time.sleep(0.15) # 模拟 NPU 延迟
+            mock_res = (
+                '{\n'
+                '  "intent": "博拓里尼阀芯工件自主识别与抓取",\n'
+                '  "priority": 1,\n'
+                '  "actions": [\n'
+                '    {"action": "move_safe", "params": {}},\n'
+                '    {"action": "pick", "params": {"target_name": "valve_core", "x": 160.0, "y": 10.0, "z": 30.0}},\n'
+                '    {"action": "place", "params": {"x": 200.0, "y": 60.0, "z": 30.0}},\n'
+                '    {"action": "move_safe", "params": {}}\n'
+                '  ]\n'
+                '}'
+            )
+            self.last_perf = {
+                "ttft_ms": 120.0,
+                "tps": 26.5,
+                "total_tokens": 85,
+                "total_time_s": 0.35
+            }
+            if callback:
+                callback(mock_res)
+            return mock_res
+
+        # 板端真实推理
+        start_t = time.time()
+        first_token_t = None
+        token_count = 0
+        output_buffer = []
+
+        def _inner_callback(token_str, state):
+            nonlocal first_token_t, token_count
+            now = time.time()
+            if first_token_t is None:
+                first_token_t = now
+            token_count += 1
+            output_buffer.append(token_str)
+            if callback:
+                callback(token_str)
+
+        self.rkllm_handle.run(prompt, _inner_callback)
+        total_time = time.time() - start_t
+
+        ttft = (first_token_t - start_t) * 1000.0 if first_token_t else 0.0
+        decode_time = total_time - (ttft / 1000.0)
+        tps = (token_count - 1) / decode_time if decode_time > 0 and token_count > 1 else 0.0
+
+        self.last_perf = {
+            "ttft_ms": round(ttft, 2),
+            "tps": round(tps, 2),
+            "total_tokens": token_count,
+            "total_time_s": round(total_time, 3)
+        }
+        return "".join(output_buffer)
+
+    def get_benchmark_report(self) -> str:
+        p = self.last_perf
+        return (
+            f"[Benchmark Report]\n"
+            f"  • 首字时延 (TTFT): {p['ttft_ms']} ms\n"
+            f"  • 生成吞吐率: {p['tps']} Tokens/s\n"
+            f"  • 总生成 Token: {p['total_tokens']}\n"
+            f"  • 端到端耗时: {p['total_time_s']} s"
+        )
+
+    def release(self):
+        if self.rkllm_handle:
+            self.rkllm_handle.release()
+            print("[RKLLM] 已释放板载 NPU 内存")
