@@ -9,7 +9,7 @@ from src.inference import RKLLMInferenceEngine
 
 
 class GraspPipeline:
-    """博拓里尼工业场景: 端侧大模型任务规划与视觉伺服机械臂全闭环调度器"""
+    """工业自动化场景: 端侧大模型任务规划与视觉伺服机械臂全闭环调度器"""
 
     def __init__(self, config: Dict[str, Any], mock_mode: bool = False):
         self.config = config
@@ -60,7 +60,7 @@ class GraspPipeline:
         self.planner = IndustrialTaskPlanner(llm_engine=self.llm_engine)
 
     def setup(self) -> bool:
-        print("[Pipeline] 正在初始化博拓里尼边缘工业大脑与执行子系统...")
+        print("[Pipeline] 正在初始化边缘工业大脑与执行子系统...")
         if not self.mock_mode:
             self.camera.start()
         self.detector.init_model()

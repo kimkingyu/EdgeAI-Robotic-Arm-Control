@@ -25,7 +25,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("  博拓里尼工业大模型端侧部署: Qwen2.5 RKLLM 量化转换")
+    print("  工业大模型端侧部署: Qwen2.5 RKLLM W4A16 极限压缩转换")
     print(f"  量化精度: {args.quant_type.upper()} | 目标平台: {args.target_platform}")
     print("=" * 60)
 

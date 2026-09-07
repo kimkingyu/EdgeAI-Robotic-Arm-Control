@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-面向博拓里尼工业场景的端侧 AI 系统与模型推理加速研究 (EdgeAI-Robotic-Arm-Control)
+面向工业场景的端侧 AI 系统与模型推理加速研究 (EdgeAI-Robotic-Arm-Control)
 主控入口程序
 """
 import argparse
@@ -31,7 +31,7 @@ def load_config(config_path: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="博拓里尼端侧 AI 工业机械臂控制系统")
+    parser = argparse.ArgumentParser(description="端侧 AI 工业机械臂控制系统")
     parser.add_argument("-c", "--config", default="configs/config.yaml", help="配置文件路径")
     parser.add_argument("--mock", action="store_true", help="启用全真模拟模式 (脱机/无实机环境自测)")
     parser.add_argument("--cmd", type=str, default="", help="直接执行单条工业自然语言指令")
@@ -39,7 +39,7 @@ def main():
 
     cfg = load_config(args.config)
     print("=" * 70)
-    print("  面向工业场景的端侧 AI 系统与模型推理加速研究 (博拓里尼股份有限公司)")
+    print("  面向工业场景的端侧 AI 系统与模型推理加速研究 (EdgeAI-Robotic-Arm-Control)")
     print(f"  模式: {'模拟运行 (Mock)' if args.mock else '实机连线 (Hardware)'}")
     print("=" * 70)
 
@@ -59,7 +59,7 @@ def main():
             # 交互式控制台
             print("\n进入工业操作员自然语言交互终端 (输入 'exit' 或 'quit' 退出):")
             while True:
-                user_input = input("\n[博拓里尼工控终端] 请输入作业指令 >> ").strip()
+                user_input = input("\n[工控终端] 请输入作业指令 >> ").strip()
                 if not user_input:
                     continue
                 if user_input.lower() in ["exit", "quit", "q"]:

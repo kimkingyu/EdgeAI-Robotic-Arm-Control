@@ -42,7 +42,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 70)
-    print("  博拓里尼工业端侧 AI 系统: RK3588 (6 TOPS NPU) 性能评测基准报告")
+    print("  工业端侧 AI 系统: RK3588 (6 TOPS NPU) 性能评测基准报告")
     print("=" * 70)
 
     llm_res = run_llm_benchmark(args.rounds)
@@ -66,7 +66,7 @@ def main():
     print(f"| **单核 NPU INT8 量化 (KL校准)** | {vis_res['int8_npu_single_core_ms']} ms | ~52 FPS | -0.4% |")
     print(f"| **3核 NPU 全开并发 + 零拷贝 (极限加速)** | **{vis_res['int8_npu_tri_core_ms']} ms** | **{vis_res['tri_core_fps']} FPS** | **{vis_res['map50_drop']} (可忽略)** |")
 
-    print("\n[评测结论] INT4/INT8 极限压缩与多核调度成功将端到端闭环时延压制在 15ms 以内，满足博拓里尼产线高频节拍需求。")
+    print("\n[评测结论] INT4/INT8 极限压缩与多核调度成功将端到端闭环时延压制在 15ms 以内，满足产线高频节拍与控制需求。")
 
 
 if __name__ == "__main__":

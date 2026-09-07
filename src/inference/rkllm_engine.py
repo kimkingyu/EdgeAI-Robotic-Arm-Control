@@ -107,7 +107,7 @@ class RKLLMInferenceEngine:
             else:
                 mock_res = (
                     '{\n'
-                    '  "intent": "博拓里尼工件自主识别与抓取",\n'
+                    '  "intent": "工业工件自主识别与抓取",\n'
                     '  "priority": 1,\n'
                     '  "actions": [\n'
                     '    {"action": "move_safe", "params": {}},\n'

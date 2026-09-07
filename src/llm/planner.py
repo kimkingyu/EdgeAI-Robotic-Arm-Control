@@ -4,9 +4,9 @@ from typing import List, Dict, Any, Optional
 
 
 class IndustrialTaskPlanner:
-    """面向博拓里尼工业场景的端侧大模型 (Qwen) 任务规划与指令解析器"""
+    """面向工业自动化场景的端侧大模型 (Qwen) 任务规划与指令解析器"""
 
-    SYSTEM_PROMPT = """你是由博拓里尼股份有限公司研发的工业边缘端具身智能机械臂大脑。
+    SYSTEM_PROMPT = """你是部署在边缘嵌入式平台上的工业具身智能机械臂核心大脑。
 你的任务是将现场操作员下达的自然语言指令，解析并拆解为可供嵌入式执行机构执行的标准 JSON 动作流。
 
 机械臂支持的基础原子动作库：

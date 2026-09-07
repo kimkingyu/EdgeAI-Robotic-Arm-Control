@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-面向博拓里尼/中船工况的 Qwen2.5 端侧大模型 Function Calling 与任务规划压力测试
+面向特种/工业工况的 Qwen2.5 端侧大模型 Function Calling 与任务规划压力测试
 评测核心:
   1. 多场景指令解析: 单工步抓取、连续组合码垛、模糊语意决策、紧急安全停机
   2. JSON Schema 格式遵循率与语法严格性 (Zero-Shot Function Calling)
