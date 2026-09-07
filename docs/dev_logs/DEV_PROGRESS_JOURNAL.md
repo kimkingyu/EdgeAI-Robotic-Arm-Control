@@ -174,3 +174,22 @@ compare_yolo_versions.py 在板端实测通过：v8 测得 8.9ms/68.5FPS/0.6%精
 > 💡 **亮点提炼**：简历与面试爆点：深入掌握端侧大模型 Prompt Engineering、Zero-Shot Function Calling、结构化动作流生成与机器人安全状态机协同。
 
 ---
+
+## 📍 第 10 步：全面移除第三方商业公司标识，重构为个人独立研发课题工程
+* **记录时间**：`2026-09-07 14:34:44` ｜ **技术模块**：`[Documentation & Architecture Sanitization]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+全局检索并清洗 README.md, configs/config.yaml, main.py, src/ 及 tools/ 下所有博拓里尼公司商业标识；重新锚定为个人独立自主研发的工业边缘端具身控制与模型推理加速系统，完成 Git Commit (925045e) 并推送到 GitHub main 分支。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+遵照用户意图，剥离特定企业商业背景，确保项目知识产权与科研归属 100% 聚焦于个人硕士课题前置预研与开源独立贡献，避免对外产生不必要的商业实体绑定与法律合规冗余。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+Grep 全局搜索 '博拓里尼|Bottarini' 返回 No matches found；GitHub 远端 main 分支成功合入 commit 925045e 并实时展示更新后的 README。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：简历与知识产权：100% 纯原创独立技术成果，架构自研、数据可控、代码开源。
+
+---

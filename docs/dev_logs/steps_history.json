@@ -88,5 +88,15 @@
     "why": "解决传统机械臂无法理解非结构化自然语言指令的痛点，构建 100% 离线自主意图解析与 Function Calling 任务拆解闭环，确保规划动作在物理半径（R<320mm）安全边界内，杜绝机械臂飞车与自碰撞。",
     "evidence": "在香橙派板端实测跑通：JSON 格式完全遵循率 100.0%、动作物理安全性通过率 100.0%、端侧任务拆解综合通过率 100.0%，平均规划时延仅 120.9 ms。",
     "value": "简历与面试爆点：深入掌握端侧大模型 Prompt Engineering、Zero-Shot Function Calling、结构化动作流生成与机器人安全状态机协同。"
+  },
+  {
+    "step": "10",
+    "timestamp": "2026-09-07 14:34:44",
+    "title": "全面移除第三方商业公司标识，重构为个人独立研发课题工程",
+    "module": "Documentation & Architecture Sanitization",
+    "how": "全局检索并清洗 README.md, configs/config.yaml, main.py, src/ 及 tools/ 下所有博拓里尼公司商业标识；重新锚定为个人独立自主研发的工业边缘端具身控制与模型推理加速系统，完成 Git Commit (925045e) 并推送到 GitHub main 分支。",
+    "why": "遵照用户意图，剥离特定企业商业背景，确保项目知识产权与科研归属 100% 聚焦于个人硕士课题前置预研与开源独立贡献，避免对外产生不必要的商业实体绑定与法律合规冗余。",
+    "evidence": "Grep 全局搜索 '博拓里尼|Bottarini' 返回 No matches found；GitHub 远端 main 分支成功合入 commit 925045e 并实时展示更新后的 README。",
+    "value": "简历与知识产权：100% 纯原创独立技术成果，架构自研、数据可控、代码开源。"
   }
 ]
