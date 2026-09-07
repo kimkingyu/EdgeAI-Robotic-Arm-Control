@@ -41,9 +41,11 @@ class PCA9685:
     def set_pwm_freq(self, freq_hz: float = 50.0):
         if not self.bus:
             return
+        # 参考 Adafruit-PWM-Servo 规范: 乘以 0.9 修正 PCA9685 内部 25MHz RC 振荡器频率过冲 (Issue #11)
+        corrected_freq = freq_hz * 0.9
         prescaleval = 25000000.0  # 25MHz 内部时钟
         prescaleval /= 4096.0     # 12-bit
-        prescaleval /= float(freq_hz)
+        prescaleval /= float(corrected_freq)
         prescaleval -= 1.0
         prescale = int(math.floor(prescaleval + 0.5))
 

@@ -26,6 +26,11 @@ data/
 *.log
 recordings/
 
-# User manuals / Large docs
+# User manuals / Large docs / Archives
 *.pdf
+*.zip
+*.rar
+PCA9685 16路舵机驱动 IIC/
+bin/
+build/
 
