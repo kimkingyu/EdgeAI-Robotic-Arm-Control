@@ -101,8 +101,12 @@ EdgeAI-Robotic-Arm-Control/
 ├── data/
 │   └── calibration/              # 量化校准集样本与指令集
 ├── docs/
+│   ├── PROJECT_ROADMAP.md        # 研发全景蓝图与阶段推进路线图 (Master Roadmap)
 │   ├── BOARD_SETUP_WALKTHROUGH.md# 香橙派板端环境配置与实战通关指南
-│   └── RESUME_GUIDE.md           # 简历项目经历与面试问答参考手册
+│   ├── PCA9685_WIRING_GUIDE.md   # PCA9685 40-Pin 极简硬件接线与引脚定义
+│   ├── SINGLE_SERVO_TEST_GUIDE.md# 单舵机免外接电源安全轻测指南
+│   ├── RESUME_GUIDE.md           # 简历项目经历与技术问答参考手册
+│   └── dev_logs/                 # 自动化研发技术台账与步骤历史索引
 ├── models/
 │   └── weights/                  # .rkllm (大模型) 与 .rknn (视觉) 量化模型
 ├── scripts/
