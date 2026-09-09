@@ -535,3 +535,22 @@ IK交叉比对：1018个测试点，双方均可解551、均拒绝467、可达�
 > 💡 **亮点提炼**：建立历史证据可复现性复核机制：用 git worktree 检出历史提交在原始代码状态下复跑验证，区分"实现变更导致的数值差异"与"数据造假"；同时具备撤回自身错误结论的纪律，避免因环境排查不彻底而误判历史工作。
 
 ---
+
+## 📍 第 29 步：本轮成果分组提交并从提交内容全新检出验证
+* **记录时间**：`2026-09-09 22:51:37` ｜ **技术模块**：`[Git & Build]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+提交前先把工作区打包到板端 /tmp/final-check 独立目录，用 cmake -DBUILD_TESTING=ON 构建并跑 CTest 与全部Python测试确认可用。按主题分四组提交：a0c4e82 C++ IK符号与PWM时基对齐及 test_cpp_control.cpp；b312bf9 PWM舍入分歧修复与 ik_dump/pwm_dump/test_ik_parity/test_pwm_parity 交叉比对工具；f8a3734 手眼标定退化输入加固与 test_hand_eye_robust.py；7756e87 probe_pca9685/bringup_servo/test_bringup_servo 三个硬件工具及日志笔误订正。提交完成后用 git worktree add /tmp/headcheck HEAD 从提交内容全新检出，打包到板端 /tmp/hc 重新构建并跑全量测试，验证完毕后 git worktree remove 清理。Git身份未配置导致首次提交失败，经用户明确授权后以 git config user.name/user.email 在本仓库局部设置为历史作者 kimkingyu <hy4538@163.com>，未使用 --global，未改动任何其他git配置。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+本轮累计修改8个文件、新增9个工具却全部堆在工作区未提交，一旦环境异常成果即丢失，且无法按主题追溯每处修复的动机。按主题分组而非一次性提交，是为了让每个提交都能独立回溯：看C++对齐就不必翻手眼标定的改动。提交信息写明"为什么这是缺陷"而非罗列改了什么，因为半年后回看时判断依据比改动本身更难重建。提交后必须从提交内容本身重新检出验证，而不能只依赖工作区的增量测试结果——工作区可能残留未纳入提交的文件，导致提交出去的版本实际不可用。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+提交前 /tmp/final-check 干净检出验证：C++构建成功、CTest 1/1 Passed、7项Python测试全PASS。四次提交均成功：a0c4e82/b312bf9/f8a3734/7756e87，git status 工作区清空无残留。提交后 /tmp/hc 从HEAD全新检出复验：CTest 100% tests passed 0 failed，test_kinematics/test_servo_mapping/test_hand_eye/test_hand_eye_robust/test_bringup_servo/ik_parity/pwm_parity 七项全PASS。git worktree list 确认临时工作树已清理。当前领先 origin/main 四个提交，尚未推送。硬件状态未变：i2c-7与0x40~0x47无响应，USB无摄像头，实机联调仍未开始。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：按主题分组提交并在提交信息中记录缺陷成因而非改动清单，配合从提交内容全新检出的复验流程，确保交付版本本身可构建可测试而非仅工作区可用。
+
+---
