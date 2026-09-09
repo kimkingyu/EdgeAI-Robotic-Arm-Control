@@ -10,6 +10,10 @@ __pycache__/
 venv/
 env/
 .venv/
+.venv-rknn/
+
+# RKNN 量化过程产生的中间计算图
+check[0-9]_*.onnx
 
 # Models & Weights (large binaries)
 *.rknn
