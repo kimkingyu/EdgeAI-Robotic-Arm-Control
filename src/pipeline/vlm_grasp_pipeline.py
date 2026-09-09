@@ -330,7 +330,9 @@ class VLMGraspPipeline:
                 approach = self.kinematics.inverse_kinematics({"x": x, "y": y, "z": safe_z})
                 target = self.kinematics.inverse_kinematics({"x": x, "y": y, "z": z})
                 if not (approach and target):
-                    print(f"  ⚠ 逆解失败，目标 ({x},{y},{z}) 可能超出工作空间，跳过")
+                    why = getattr(self.kinematics, "last_reject_reason", None)
+                    print(f"  ⚠ 逆解失败，目标 ({x},{y},{z}) 不可达"
+                          f"{'：' + why if why else ''}，跳过该动作")
                     continue
                 if name == "pick":
                     self.controller.gripper_control(1.0)
