@@ -15,6 +15,18 @@ env/
 # RKNN 量化过程产生的中间计算图
 check[0-9]_*.onnx
 
+# 调研过程的临时探测产物（保留在本地，不入库）
+/*_tmp.json
+/resp_tmp.txt
+/test_probe.py
+/dep.json
+/ex.json
+/mm.json
+/src.json
+/root.json
+/t.json
+/vl8b.json
+
 # Models & Weights (large binaries)
 *.rknn
 *.onnx
