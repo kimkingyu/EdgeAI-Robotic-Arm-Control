@@ -18,18 +18,23 @@ class RKLLMInferenceEngine:
         self.max_new_tokens = max_new_tokens
         self.rkllm_handle = None
         self.is_ready = False
+        self.is_mock = False      # True 表示未加载真实模型，输出为预置文本
         self.last_perf = {
-            "ttft_ms": 0.0,       # 首 Token 时延 (Prefill)
-            "tps": 0.0,           # 每秒生成 Token 吞吐 (Decode)
-            "total_tokens": 0,
-            "total_time_s": 0.0
+            "ttft_ms": None,      # 首 Token 时延 (Prefill)，未真实推理时为 None
+            "tps": None,          # 每秒生成 Token 吞吐 (Decode)
+            "total_tokens": None,
+            "total_time_s": None,
+            "is_mock": None,      # True 表示该组数据来自 Mock，不可用于性能结论
         }
 
     def load_model(self) -> bool:
-        """加载经过 W4A16 量化后的 .rkllm 格式大模型"""
+        """加载量化后的 .rkllm 格式大模型"""
         if not HAS_RKLLM:
-            print(f"[RKLLM] 提示: 当前系统未安装 rkllm 运行时，将以轻量 Mock 模式运行")
+            print("[RKLLM] 警告: 未安装 rkllm 运行时，进入 Mock 模式。")
+            print("        Mock 模式仅用于打通上层链路，其输出为预置文本，"
+                  "不代表任何真实模型能力，严禁据此得出性能或准确率结论。")
             self.is_ready = True
+            self.is_mock = True
             return True
 
         if not os.path.exists(self.model_path):
@@ -117,11 +122,14 @@ class RKLLMInferenceEngine:
                     '  ]\n'
                     '}'
                 )
+            # Mock 模式不产出任何性能数字：此处没有真实推理发生，
+            # 若在此填入 ttft/tps，将污染 benchmark 报告并误导后续决策。
             self.last_perf = {
-                "ttft_ms": 120.0,
-                "tps": 26.5,
-                "total_tokens": 85,
-                "total_time_s": 0.35
+                "ttft_ms": None,
+                "tps": None,
+                "total_tokens": None,
+                "total_time_s": None,
+                "is_mock": True,
             }
             if callback:
                 callback(mock_res)
@@ -154,12 +162,19 @@ class RKLLMInferenceEngine:
             "ttft_ms": round(ttft, 2),
             "tps": round(tps, 2),
             "total_tokens": token_count,
-            "total_time_s": round(total_time, 3)
+            "total_time_s": round(total_time, 3),
+            "is_mock": False,
         }
         return "".join(output_buffer)
 
     def get_benchmark_report(self) -> str:
         p = self.last_perf
+        if p.get("is_mock"):
+            return ("[Benchmark Report] 当前为 Mock 模式，未发生真实 NPU 推理，"
+                    "无性能数据可报告。\n"
+                    "  → 需部署 .rkllm 模型并安装 RKLLM 运行时后重测。")
+        if p.get("ttft_ms") is None:
+            return "[Benchmark Report] 尚未执行任何推理，无数据。"
         return (
             f"[Benchmark Report]\n"
             f"  • 首字时延 (TTFT): {p['ttft_ms']} ms\n"

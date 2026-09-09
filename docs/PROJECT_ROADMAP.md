@@ -101,15 +101,17 @@
 - [x] **2.1 工业 Prompt 工程与动作状态机设计**：
   - 编写 `src/llm/planner.py`，基于 Qwen 原生 `<|im_start|>` 格式规范输入与纯 JSON 输出格式；
   - 定义 `pick`、`place`、`inspect`、`move_safe` 与 `emergency_stop` 五大核心原子动作。
-- [x] **2.2 典型工业多工况压力测试**：
+- [x] **2.2 典型工业多工况测试用例集**：
   - 编写 `tools/test_qwen_function_calling.py`，覆盖标准工步、连续码垛、安全急停、模糊意图等 5 大典型场景；
-  - 板端实测验证：JSON Schema 完全遵循率 100%、物理动作安全性校验 100%、平均意图解析耗时 120.9ms。
+  - ⚠️ **此前记载的"遵循率 100%、耗时 120.9ms"已证伪**：板端未装 rkllm，引擎静默走 Mock 分支，该数据实为 `time.sleep(0.12)` 与规则引擎关键字匹配的产物，不代表模型能力。已修正为 Mock 模式强制告警，详见 [`QWEN_DEPLOYMENT_BLOCKER.md`](QWEN_DEPLOYMENT_BLOCKER.md)。
 - [x] **2.3 端云协同自适应分发与断网无感降级**：
   - 编写 `src/llm/cloud_api_client.py` 与 `src/llm/hybrid_router.py`，构建混合路由体系；
   - 运行 `tools/compare_cloud_edge.py` 完成三模态全景 Benchmark 测试。
-- [ ] **2.4 Qwen2.5 W4A16 板端真实权重转换与部署**：
-  - 在 PC 端运行 `tools/export_rkllm.py`，执行权重 4-bit、激活值 16-bit 混合量化；
-  - 验证显存物理驻留由 1.5GB 降至 420MB（压缩比 72%），首字时延 TTFT < 150ms。
+- [ ] **2.4 Qwen2.5 板端真实权重部署【受阻 ⛔】**：
+  - **硬约束**：`rkllm-toolkit` 官方从 v1.0.1 到 v1.3.0 **只发布 `linux_x86_64` wheel，无任何 aarch64 版本**（已通过 GitHub API 核实全部 4 个 wheel）。与阶段一的 `rknn-toolkit2` 不同，**板端无法自转自跑**；
+  - **次生约束**：板端 `librkllmrt.so` 为 v1.0.1（2024-05，早于 Qwen2.5 发布），头文件仍是旧的 `_LLM_H_` 接口；社区现成模型均由 toolkit v1.2.x 转换，需先升级运行时（v1.2.3 要求 RKNPU 驱动 0.9.8，板端为 0.9.6）；
+  - **可行路径**：① 部署社区现成 W8A8 模型（已验证 hf-mirror 可达，1.5B 约 2.05GB）；② 借 x86_64 Linux 主机自行量化；③ 暂缓，先推阶段四；
+  - 完整调研与决策依据见 [`QWEN_DEPLOYMENT_BLOCKER.md`](QWEN_DEPLOYMENT_BLOCKER.md)。
 
 ---
 

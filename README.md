@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-RK3588%20%7C%20Ubuntu%2022.04%20aarch64-orange.svg)](https://github.com/kimkingyu/EdgeAI-Robotic-Arm-Control)
-[![Model](https://img.shields.io/badge/LLM-Qwen2.5%20(W4A16)-purple.svg)](https://github.com/QwenLM/Qwen2.5)
+[![Model](https://img.shields.io/badge/LLM-Qwen2.5-purple.svg)](https://github.com/QwenLM/Qwen2.5)
 [![NPU Accelerator](https://img.shields.io/badge/NPU%20Engine-RKLLM%20%26%20RKNPU2-red.svg)](https://github.com/airockchip/rknpu2)
 [![Author](https://img.shields.io/badge/Author-kimkingyu-lightgrey.svg)](https://github.com/kimkingyu)
 
@@ -26,7 +26,7 @@
 │                                                                        │
 │   [Qwen2.5 工业大模型] ──► [端侧任务规划器 TaskPlanner]                │
 │            ▲                                                           │
-│            │ (RKLLM W4A16 混合量化加速, 27+ Tokens/s, TTFT < 120ms)     │
+│            │ (RKLLM 端侧推理，量化部署受阻中，见部署约束调研)          │
 │            ▼                                                           │
 │   [结构化工业动作序列 JSON] (pick / place / inspect / move_safe)        │
 └────────────────────────────────────────────────────────────────────────┘
@@ -57,7 +57,7 @@
 * 基于 Qwen2.5 设计专用工业 Prompt 格式与 Function Calling 解析器，将非结构化自然语言指令秒级转化为严格可执行的底层动作状态机。
 
 ### 2. INT4/INT8 极限压缩与非对称量化校准 (PTQ & Calibration)
-* **W4A16 混合量化**：针对嵌入式内存带宽瓶颈，采用 `rkllm-toolkit` 对 Qwen2.5 实现权重 4-bit 压缩、激活值 16-bit 浮点运算，将大模型显存占用从 3GB+ 压缩至 **420MB**（**体积缩减 72%**），困惑度损失 < 1.2%；
+* **大模型量化（规划中，尚未实测）**：目标采用 `rkllm-toolkit` 对 Qwen2.5 实施 W4A16 混合量化。当前受阻于该工具链仅提供 `linux_x86_64` wheel，无 aarch64 版本，详见 [部署约束调研](docs/QWEN_DEPLOYMENT_BLOCKER.md)；
 * **视觉骨干 INT8 量化**：构建 100 张真实场景校准集，采用逐通道非对称 INT8 训练后量化（PTQ），YOLOv8n 体积由 12.2MB 压至 **4.73MB（缩减 61.2%）**，权重内存仅 3.6MB；攻克 `opset 超限`、`校准集路径二次拼接`、`动态形状无法量化` 三处工程硬伤。
 
 ### 3. RK3588 3核 NPU 异构并发调度与系统级调优
@@ -75,13 +75,14 @@
 
 *测试硬件：香橙派 OrangePi 5 Pro (RK3588S, 16GB LPDDR5) / Ubuntu 22.04 LTS (Kernel 5.10.160)*
 
-### 1. 端侧大模型 (Qwen2.5) RKLLM 量化加速对比
-| 指标项 | 原始未量化 (FP16) | **W4A16 混合量化 (本项目)** | 优化收益 |
-| :--- | :---: | :---: | :---: |
-| **模型体积 / 显存驻留** | 1,480 MB | **420 MB** | **显存暴降 72%** |
-| **首字响应时延 (TTFT)** | 385 ms | **118.5 ms** | **时延降低 69%** |
-| **生成吞吐 (Tokens/s)** | 8.2 tok/s | **27.4 tok/s** | **生成速度翻 3.3 倍** |
-| **NPU 算力平均利用率** | 28% | **82% (多核负载均衡)** | 算力充分榨干 |
+### 1. 端侧大模型 (Qwen2.5) —— 尚未实测 ⛔
+
+> 此处原有一组 TTFT / TPS / 显存数据，经核查为源码硬编码常量而非实测结果，已移除。  
+> 项目坚持**只呈现真实跑出的数据**，未实测项如实标注。
+
+**受阻原因**：`rkllm-toolkit` 官方从 v1.0.1 至 v1.3.0 仅发布 `linux_x86_64` wheel，**无 aarch64 版本**（已通过 GitHub API 核实），香橙派无法在板端完成量化——这与阶段一 `rknn-toolkit2` 提供 aarch64 wheel 的情况截然不同。此外板端 RKLLM 运行时为 v1.0.1（2024-05），早于 Qwen2.5 发布。
+
+完整调研、证伪过程与可行路径见 **[Qwen 部署约束调研](docs/QWEN_DEPLOYMENT_BLOCKER.md)**。
 
 ### 2. 视觉感知引擎板端实测评测
 
@@ -136,6 +137,7 @@ EdgeAI-Robotic-Arm-Control/
 │   ├── PCA9685_WIRING_GUIDE.md   # PCA9685 40-Pin 极简硬件接线与引脚定义
 │   ├── SINGLE_SERVO_TEST_GUIDE.md# 单舵机免外接电源安全轻测指南
 │   ├── NPU_REPRODUCTION_GUIDE.md # NPU 量化与推理加速全流程复现指南
+│   ├── QWEN_DEPLOYMENT_BLOCKER.md# Qwen 端侧部署约束调研与路线决策
 │   ├── RESUME_GUIDE.md           # 简历项目经历与技术问答参考手册
 │   ├── benchmarks/               # 板端实测性能报告与原始 JSON 数据
 │   └── dev_logs/                 # 自动化研发技术台账与步骤历史索引

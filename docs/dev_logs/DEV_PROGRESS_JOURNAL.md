@@ -288,3 +288,22 @@ YOLOv8n 12.2MB->4.73MB 压缩61.2%，算子直通率 97.46%(115/118) 纯计算�
 > 💡 **亮点提炼**：工程素养亮点：交付可复现的技术文档而非结果堆砌，所有命令均经实测验证，主动暴露并归档8类典型故障的根因与解法，体现对工程可复现性与知识沉淀的重视。
 
 ---
+
+## 📍 第 16 步：证伪阶段二Mock伪造数据并完成Qwen端侧部署硬约束调研
+* **记录时间**：`2026-09-09 12:09:27` ｜ **技术模块**：`[LLM Deployment & Data Integrity]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+通过 GitHub API 核实 rkllm-toolkit 全部 wheel 架构，确认 v1.0.1~v1.3.0 仅有 linux_x86_64 无 aarch64；核查板端 librkllmrt.so 版本与 rkllm.h 接口确认为 v1.0.1；重写 rkllm_engine.py 使 Mock 模式 last_perf 全部置 None 并标记 is_mock，重写 benchmark_quant.py 与 compare_cloud_edge.py 改为读取实测 JSON，test_qwen_function_calling.py 增加 Mock 强制告警；新增 docs/QWEN_DEPLOYMENT_BLOCKER.md 归档完整调研。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+发现阶段二所谓'JSON遵循率100%、耗时120.9ms'实为 mock 分支 time.sleep(0.12) 与规则引擎关键字匹配的产物：板端未装 rkllm 导致 HAS_RKLLM=False，load_model 静默返回 True 进入 Mock，整条链路无任何报错因此长期未被发现。性能数字硬编码在源码中会误导技术决策并在面试中直接穿帮，必须证伪并如实标注。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+GitHub API 返回 rkllm-toolkit/packages 下 4 个 wheel 全为 linux_x86_64；板端 rkllm.h 为旧接口 _LLM_H_/LLM_RUN_NORMAL 确认 runtime v1.0.1，驱动 RKNPU v0.9.6；修正后 test_qwen_function_calling.py 打印'120.3ms'并同时强制声明该数据非模型能力指标；benchmark_quant.py 视觉部分正确读出 4.73MB/22.606ms/104.5FPS 真实值，LLM 部分明确标注尚未实测。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：工程诚信与技术判断力：主动识别并证伪自身项目中的虚假性能数据，通过官方仓库架构核验定位工具链硬约束，区分'架构设计已完成'与'能力已验证'两个不同概念，所有对外指标均可追溯至真实产物。
+
+---

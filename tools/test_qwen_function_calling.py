@@ -75,10 +75,13 @@ def validate_plan_safety(plan: Dict[str, Any], max_workspace_r: float = 320.0) -
     return True
 
 
-def run_function_calling_evaluation(planner: IndustrialTaskPlanner):
+def run_function_calling_evaluation(planner: IndustrialTaskPlanner, is_mock: bool = False):
     print("=" * 80)
-    print("  Qwen2.5 端侧大模型 (RKLLM W4A16) 工业 Function Calling 与任务规划压力测试")
+    print("  Qwen2.5 端侧大模型工业 Function Calling 与任务规划评测")
     print("=" * 80)
+    if is_mock:
+        print("  ⚠️  Mock 模式：未加载真实 .rkllm 模型，以下结果不代表模型能力")
+        print("=" * 80)
 
     total_cases = len(TEST_INDUSTRIAL_CASES)
     passed_cases = 0
@@ -126,25 +129,38 @@ def run_function_calling_evaluation(planner: IndustrialTaskPlanner):
     pass_rate = (passed_cases / total_cases) * 100.0
 
     print("\n" + "=" * 80)
-    print("                    Function Calling 实测性能评估汇总")
+    print("                    Function Calling 评估汇总")
     print("=" * 80)
     print(f"  • 测试用例总数: {total_cases} 组")
     print(f"  • JSON 格式完全遵循率: {json_acc:.1f}% (严格输出预定义 Schema)")
     print(f"  • 动作物理安全性通过率: {(safety_valid_count / total_cases) * 100.0:.1f}%")
-    print(f"  • 端侧任务拆解综合通过率: {pass_rate:.1f}%")
-    print(f"  • 端侧平均规划时延: {avg_latency:.1f} ms (远优于云端 API 的数百毫秒)")
+    print(f"  • 任务拆解综合通过率: {pass_rate:.1f}%")
+
+    if is_mock:
+        print(f"  • 平均耗时: {avg_latency:.1f} ms")
+        print("=" * 80)
+        print("⚠️  以上数据【不是】大模型能力指标！")
+        print("   当前运行在 Mock / 规则兜底路径，未发生任何真实 NPU 推理：")
+        print("     - 通过率反映的是预置文本与规则引擎的关键字匹配，必然接近 100%；")
+        print("     - 耗时反映的是 Python 函数调用开销，不含模型 prefill 与 decode。")
+        print("   真实评测需先部署 .rkllm 模型并升级 RKLLM 运行时，详见")
+        print("   docs/QWEN_DEPLOYMENT_BLOCKER.md")
+    else:
+        print(f"  • 端侧平均规划时延: {avg_latency:.1f} ms")
     print("=" * 80)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Qwen2.5 工业 Function Calling 评测")
+    parser.add_argument("--model", default="models/weights/qwen2.5_1.5b_w8a8.rkllm",
+                        help=".rkllm 模型路径")
     args = parser.parse_args()
 
-    engine = RKLLMInferenceEngine(model_path="models/weights/qwen2.5_0.5b_w4a16.rkllm")
+    engine = RKLLMInferenceEngine(model_path=args.model)
     engine.load_model()
     planner = IndustrialTaskPlanner(llm_engine=engine)
 
-    run_function_calling_evaluation(planner)
+    run_function_calling_evaluation(planner, is_mock=getattr(engine, "is_mock", False))
 
 
 if __name__ == "__main__":
