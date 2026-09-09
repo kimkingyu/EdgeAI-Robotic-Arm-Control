@@ -85,8 +85,9 @@
 
 ### 2. 视觉感知引擎板端实测评测
 
-> 以下数据全部由香橙派板端真实跑出（rknn-toolkit2 2.3.2 / librknnrt 2.3.2，300 轮正式测试 + 20 轮预热），  
-> 完整测试过程、踩坑记录与复现命令见 **[NPU 推理加速实测报告](docs/benchmarks/NPU_BENCHMARK_REPORT.md)**。
+> 以下数据全部由香橙派板端真实跑出（rknn-toolkit2 2.3.2 / librknnrt 2.3.2，300 轮正式测试 + 20 轮预热）。  
+> 📊 完整数据与分析：**[NPU 推理加速实测报告](docs/benchmarks/NPU_BENCHMARK_REPORT.md)**  
+> 🔧 想自己跑一遍：**[NPU 量化与加速复现指南](docs/NPU_REPRODUCTION_GUIDE.md)**（从裸板到 112 FPS，全程板端，无需 x86 PC）
 
 **① 模型量化压缩效果**
 
@@ -134,6 +135,7 @@ EdgeAI-Robotic-Arm-Control/
 │   ├── BOARD_SETUP_WALKTHROUGH.md# 香橙派板端环境配置与实战通关指南
 │   ├── PCA9685_WIRING_GUIDE.md   # PCA9685 40-Pin 极简硬件接线与引脚定义
 │   ├── SINGLE_SERVO_TEST_GUIDE.md# 单舵机免外接电源安全轻测指南
+│   ├── NPU_REPRODUCTION_GUIDE.md # NPU 量化与推理加速全流程复现指南
 │   ├── RESUME_GUIDE.md           # 简历项目经历与技术问答参考手册
 │   ├── benchmarks/               # 板端实测性能报告与原始 JSON 数据
 │   └── dev_logs/                 # 自动化研发技术台账与步骤历史索引
