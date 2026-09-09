@@ -216,7 +216,67 @@
     "module": "Servo Safety",
     "how": "新建 tools/test_servo_mapping.py 验证时基一致性、脉宽边界单调性、IK角度截断、越界防护五类用例；修复 i2c_arm.py：set_pwm_freq 按 prescale 反算芯片真实周期并回填 period_us 供 tick 换算、set_servo_angle 增加 strict 模式显式拒绝越界、move_joints 改为逐关节按 DEFAULT_JOINT_CALIB 标定换算且任一越界即整体拒绝下发；在 kinematics_base.py 新增 JOINT_LIMITS 由舵机行程倒推的关节角约束，使不可达姿态在IK阶段即被拒绝。",
     "why": "IK算对了但PWM映射写错，舵机仍会超程堵转烧毁线圈且不可逆。审代码发现两处隐患：set_servo_angle 用20000us理论周期换算tick，但set_pwm_freq做了0.9过冲修正使实际周期为22282us；move_joints 对所有关节统一 ang+90 偏置后静默clamp，而IK的elbow范围是[-180,0]，偏置后仍为负会被压成0度。",
-    "evidence": "修复前实测：时基偏差11.4%导致90度指令实际偏15.4度、6个测试关节中4个被静默截断(如elbow -96.4度被压成0度)、越界角度静默夹紧无告警。修复后：时基偏差0.000%脉宽误差降至0.27~0.45度、elbow -96.4度正确映射为舵机83.6度、越界角度显式拒绝、整臂含越界关节时整体拒绝下发；关节限位使可达域从80.8%收窄至55.4%(排除舵机转不到的姿态)，运动学回环误差保持0.126mm。",
+    "evidence": "修复前实测：时基偏差11.4%导致90度指令实际偏10.3度(原记录写作15.4度，为笔误，已按脚本实际输出订正)、6个测试关节中4个被静默截断(如elbow -96.4度被压成0度)、越界角度静默夹紧无告警。修复后：时基偏差0.000%脉宽误差降至0.27~0.45度、elbow -96.4度正确映射为舵机83.6度、越界角度显式拒绝、整臂含越界关节时整体拒绝下发；关节限位使可达域从80.8%收窄至55.4%(排除舵机转不到的姿态)，运动学回环误差保持0.126mm。",
     "value": "工程亮点：识别出跨函数的隐式契约破坏(设频做了修正但换算未同步)、区分数学可解与物理可达(数学上有解不代表舵机转得到)、以及安全系统设计原则(刚性联动结构下部分执行比不执行更危险，故整体拒绝)。"
+  },
+  {
+    "step": "23",
+    "timestamp": "2026-09-09 22:08:48",
+    "title": "C++ IK 与 PCA9685 对齐修复，通过隔离寄存器回归测试",
+    "module": "Kinematics/I2C/Build",
+    "how": "修改 include/kinematics.hpp、src/kinematics.cpp：肘关节改为负相对角；肩关节距离按内外各5mm裕度拒绝；检查自由度、连杆参数、非有限输入、全部关节限位；拒绝结果角度列表为空并带 reject_reason。保留C++原有105mm底座默认，增加显式尺寸配置，不擅自改成Python默认100mm。修改 include/pca9685.hpp：由写入prescale与配置振荡频率计算周期估计，拒绝非法角度/通道/频率/脉宽；每关节offset为90/90/180/90；setJointAngles先验证全部关节再一次写连续寄存器；I2C读写或短写失败返回false并使连接失效。新增 tools/test_cpp_control.cpp 并接入CMake/CTest，以链接--wrap替换设备调用。tar通过SSH发送到板端独立/tmp/edgeai-cpp-check.txXL1z，执行 cmake -S /tmp/edgeai-cpp-check.txXL1z -B /tmp/edgeai-cpp-check.txXL1z/build -DBUILD_TESTING=ON；cmake --build /tmp/edgeai-cpp-check.txXL1z/build --parallel 4；ctest --test-dir /tmp/edgeai-cpp-check.txXL1z/build --output-on-failure -V。另以GCC -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined,float-cast-overflow构建并运行同一测试。核对本地和板端五个源码文件SHA256一致。未修改板端原仓库、未运行主程序、未进行Git提交或推送。",
+    "why": "修复C++实现与FK符号、PWM时基不一致的问题，避免静默截断或部分合法指令下发。固定已知可达/不可达用例，防止全部拒绝却被误报为通过；捕获实际函数写出的测试寄存器，而非仅复算同一公式。0.9保留为项目历史默认而非通用实测校准；振荡频率和修正系数可显式配置。注意：C++主程序仍是占位检测/线性坐标映射且未调用PCA9685，不能宣称C++实机闭环完成；当前FK/IK描述前臂末端，未建模夹爪工具偏移；默认行程和脉宽端点未获实物标定。关闭文件描述符不等于关闭芯片PWM，I2C短写也不能保证事务回滚。",
+    "evidence": "板端GCC11.4/OpenCV4.5.4，edge_arm_control与test_cpp_control构建成功。最终Release CTest：1/1 Passed，3022 checks，0 failures；224点网格125可解、99拒绝，最大纯数学回环误差1.797547e-13mm。测试寄存器捕获prescale=135、端点ticks=92/276/460；基于25MHz配置的周期估计22282.24us；40/50/60Hz角度扫描最大计算量化误差3.377778us。最终ASan/UBSan/float-cast-overflow构建：3022 checks，0 failures，无Sanitizer报告，最大纯数学回环误差1.932885e-13mm。初次Sanitizer运行出现1656条级联断言失败：nm -u定位到glibc __read_chk未被原read包装拦截；补充--wrap=__read_chk及相应测试替身后通过，未为迁就测试改坏驱动。Gemini复查代理因接口schema错误未运行，未计入审查证据。所有PWM数值均为测试替身/配置模型计算，不是示波器、舵机角度或真实抓取实测；硬件仍待到货确认与实物校准。git diff --check通过。",
+    "value": "构建C++控制链的硬件隔离回归测试，覆盖解析运动学符号一致性、寄存器时基、整臂指令预校验和I2C故障注入；使用地址/未定义行为检测器及源码哈希核对形成可复现证据，明确区分计算验证与实物精度。"
+  },
+  {
+    "step": "24",
+    "timestamp": "2026-09-09 22:22:38",
+    "title": "舵机板到货后只读I2C探测：确认尚未接入总线",
+    "module": "I2C/BSP",
+    "how": "新增 tools/probe_pca9685.py，仅用 smbus2 读 MODE1/MODE2/PRESCALE 三个寄存器，不写任何寄存器，因而不会改变PWM输出或使已上电舵机动作；按数据手册估算频率并解析SLEEP等标志位。板端执行 ls /sys/class/i2c-dev/*/name 辨识适配器；对 i2c-0/2/3/6/7/9/10 逐条执行 i2cdetect -y -r；scp脚本到板端 /tmp 后 pip3 install --user smbus2 并运行探测，覆盖总线7/0/2/3/6与地址0x40~0x47。同时执行 lsusb 与 ls /dev/video* 核对相机。未写入任何I2C寄存器，未运行主程序，未改动板端仓库，未做Git提交。",
+    "why": "舵机板到货但相机未到，先用零写入方式确认硬件是否真正接入，避免在未确认接线与供电的情况下直接下发PWM导致堵转烧毁。探测脚本刻意不含写操作，把上电驱动留到接线和限位确认之后。区分\"环境缺失\"与\"探测结论\"也很关键：smbus2 未安装时脚本返回退出码2并明确提示，不能被误读为设备不存在。",
+    "evidence": "i2c适配器名称：i2c-0/2/3/6/7为rk3x-i2c，i2c-9为fde50000.dp，i2c-10为ddc(HDMI DDC，扫描出的密集地址属于DDC总线特性，非舵机板)。i2cdetect：i2c-7全空；i2c-0显示UU 0x42/0x43、i2c-2显示UU 0x42、i2c-3显示UU 0x11、i2c-6显示UU 0x51，均为内核已占用的板载器件(0-0042,0-0043,2-0042,3-0011,6-0051,7-0014)，无0x40候选。i2cget -y 7 0x40 0x00 返回 Read failed(exit=2)。安装 smbus2-0.6.1 后运行探测：总线7/0/2/3/6在0x40~0x47范围内均无响应，退出码1。lsusb仅见root hub与Terminus Hub，无USB摄像头；/dev下只有video-dec0/video-enc0编解码节点，无video0采集节点。用户确认：舵机板已到货、相机未到。结论：舵机板尚未接线到开发板，实机联调仍不能开始。两次代码审查子代理分别因Gemini接口schema错误与Codex额度耗尽未能运行，不计入本步证据。",
+    "value": "交付零写入的硬件在线探测工具并区分环境缺失与设备缺失，通过适配器名称识别DDC总线避免把HDMI地址误判为舵机板，体现上电前的安全排查纪律。"
+  },
+  {
+    "step": "25",
+    "timestamp": "2026-09-09 22:27:25",
+    "title": "交付分步通电自检脚本并用假总线验证其写入路径",
+    "module": "I2C",
+    "how": "新增 tools/bringup_servo.py：阶段0只读探测为默认行为；阶段1写PRESCALE需显式 --allow-write，按手册先置SLEEP再改预分频，随后清SLEEP并开自动递增，写后回读校验；阶段2驱动舵机需同时给出 --allow-write、--servos-connected 与显式 --channel，并要求终端输入yes，仅在中位90°±15°做五点小幅往返且首尾停中位。新增 tools/test_bringup_servo.py：用假SMBus替换smbus2捕获全部读写，覆盖无应答零写入、默认只读零写入、设频序列与PRESCALE=135、回读不一致中止、写入失败中止、非交互取消、输入非yes取消、仅触碰目标通道四个寄存器共20次写入及摆幅校验。板端执行参数校验与两轮离线测试。全程未接触真实I2C设备，未运行主程序，未做Git提交。",
+    "why": "接线后第一次通电是整个项目物理损坏风险最高的时刻，需要把\"允许写寄存器\"和\"允许驱动舵机\"拆成两道各自需要显式声明的关卡，而不是一键全臂上电。阶段1/2 是唯一会真正驱动舵机的代码路径，无硬件时永远走不到，若等接线后才首次执行，写错寄存器或脉宽换算错误会直接作用在实物上，因此必须先用假总线验证。首轮测试8项失败源于我把 reg >= LED0_ON_L 当作通道寄存器判据，导致 PRESCALE(0xFE) 被误计入；这是测试判据错误，已修正过滤区间为0x06~0x45，未改动脚本逻辑去迁就测试。",
+    "evidence": "参数拒绝路径：缺channel/非法通道/非法脉宽/非法频率均退出码2并给出具体原因；无设备时阶段0报 ENXIO 退出码1；不存在总线报 No such file or directory 退出码1。假总线测试首轮8项失败(误判PRESCALE为通道寄存器，实际触碰寄存器列表含254)，修正判据后全部通过、退出码0：设频写入顺序[MODE1,PRESCALE,MODE1,MODE1]、PRESCALE=135、90°换算276 ticks与独立复算一致、仅触碰通道3的0x12~0x15共20次写入、总摆幅331.8us对应±15°。所有数值均来自假总线与公式复算，不是示波器或实物舵机行为。硬件状态未变：i2c-7 及 0x40~0x47 仍无响应，舵机板尚未接线。三次代码审查子代理分别因Gemini schema错误、Codex额度耗尽、Anthropic schema错误未能运行，不计入证据。",
+    "value": "把高风险的首次通电拆为需逐级显式授权的分步流程，并用假总线在无硬件条件下验证真实写入序列与安全默认，体现测试判据错误与被测逻辑错误的区分能力。"
+  },
+  {
+    "step": "26",
+    "timestamp": "2026-09-09 22:31:41",
+    "title": "C++与Python双实现交叉比对，发现并修复PWM舍入分歧",
+    "module": "Kinematics/I2C",
+    "how": "新增 tools/ik_dump.cpp 与 tools/test_ik_parity.py：C++侧以相同连杆参数(100/150/150)从stdin读取目标点并输出JSON解，Python侧直接调用SimpleArmKinematics，在1018个点上逐点比对可达判定与四个关节角。新增 tools/pwm_dump.cpp 与 tools/test_pwm_parity.py：pwm_dump沿用与test_cpp_control.cpp相同的--wrap假总线手法，让真实PCA9685Driver在假总线上运行并捕获实际写入的tick，对0~180°步进0.25°共721个角度与Python侧比对。修改 src/controller/i2c_arm.py 第109行换算：int()截断改为math.floor(x+0.5)。同步修正 tools/test_servo_mapping.py 中两处独立复算公式。板端 /tmp/edgeai-parity 独立目录用g++ -O2 -Wall -Wextra构建导出程序并运行全部测试。未接触真实I2C设备，未运行主程序，未做Git提交。",
+    "why": "项目并存两套运动学与两套PWM换算实现：C++驱动实时控制线程，Python驱动VLM抓取编排器。两者若不一致，实机表现为\"换条控制路径就抓偏一点\"，而任何单侧测试都测不出来，必须交叉比对。发现两处真实分歧：其一Python用int()截断、C++用std::round，同角度差1 tick(约5.4us/0.49°)且截断系统性偏短半个tick；其二改用Python内置round后仍在108°分歧，因为内置round是银行家舍入(四舍六入五成双)而std::round是五入远离零，该角度恰好算得312.5 ticks。故用floor(x+0.5)精确复现C++语义，而不是把C++改成迁就Python。测试脚本中的独立复算也必须同步，否则复算公式与被测实现同源就失去了交叉验证意义。",
+    "evidence": "IK交叉比对：1018个测试点，双方均可解551、均拒绝467、可达判定不一致0、关节角不一致0、最大关节角偏差0.000000°。PWM交叉比对首轮失败：108.00°处C++给313 ticks而Python给312，时基双方均为22282.2400us一致；修复后721个角度全部一致(其中1个恰好落在.5边界)，退出码0。回归测试全部通过：test_servo_mapping 0°/90°/180°→92/276/460 ticks，误差0.043°/0.130°/0.216°(修复前为91/275/459，误差0.446°/0.360°/0.274°)；test_kinematics通过；bringup_servo假总线验证全部通过。所有数值均来自公式复算与假总线，不是示波器或实物舵机实测。硬件状态未变：i2c-7与0x40~0x47仍无响应，舵机板未接线，USB无摄像头。",
+    "value": "通过跨语言双实现交叉比对定位到单侧测试无法暴露的1-tick系统性偏差，并深入到浮点舍入语义层面(银行家舍入vs远离零)定位.5边界分歧，体现多实现一致性验证与数值细节的工程严谨性。"
+  },
+  {
+    "step": "27",
+    "timestamp": "2026-09-09 22:41:07",
+    "title": "手眼标定健壮性加固：修复共线误判、NaN崩溃与奇异矩阵漏检",
+    "module": "Vision",
+    "how": "新增 tools/test_hand_eye_robust.py 覆盖共线点、全重复点、点数不匹配、含NaN/inf示教数据、五类损坏标定文件与未标定状态各接口。据其结果修改 src/vision/hand_eye.py：calibrate 增加输入格式异常捕获、非有限值前置拦截并报出具体组号、新增 _is_degenerate 用协方差特征值比值做共线检测(去均值归一化后 smallest/largest<1e-8)、求解结果有限性校验；load 增加3x3形状校验、非有限校验与不可逆校验；新增 _safe_inverse 在捕获LinAlgError与有限性检查之外增加 M@inv 回乘校验(残差<1e-6)。板端先 pip3 install --user numpy opencv-python-headless 补齐依赖后运行全部测试。未接触硬件，未运行主程序，未做Git提交。",
+    "why": "既有 test_hand_eye.py 只验证输入良好时算得对不对，但实机标定靠人工示教，真实故障来自坏输入。发现三个真实缺陷：其一示教数据含一个NaN会让np.linalg.inv抛LinAlgError直接中断标定，现场只见栈回溯无法定位哪组点录错；其二载入尺寸错误的标定文件时不报错，推迟到pixel_to_robot才抛ValueError，那时已在执行抓取流程；其三共线标记点竟标定\"成功\"且RMS报0.000mm，看似完美实则把画面任意点映射到一条直线上。加固_safe_inverse是因为发现仅捕获异常不足以拦截奇异矩阵。另需说明：板端此前从未安装numpy/cv2(用户site下仅有本轮安装的smbus2)，因此第22步记录的手眼标定验证在板端与本地Windows均无法运行，那条证据不成立；本轮是该测试首次真正执行，结果为含噪声定位误差0.64mm。C++侧 include/hand_eye_trans.hpp 仅有类声明而无任何实现文件，main.cpp 实际使用硬编码线性映射，故C++与Python手眼实现无法交叉比对，C++视觉侧尚不具备真实坐标变换能力。",
+    "evidence": "首轮健壮性测试3项失败：含NaN标定抛LinAlgError、含inf标定抛LinAlgError、矩阵尺寸错误后变换抛ValueError；另发现共线点标定返回成功且RMS 0.000mm。单独验证奇异矩阵[[1,2,3],[2,4,6],[3,6,9]]：det=-1.11e-31，np.linalg.inv不抛异常而返回最大元素1.80e16的结果且全部isfinite通过，M@inv偏离单位阵达3.0，证明仅靠异常捕获与有限性检查无法拦截。修复后健壮性测试全部通过：含NaN/inf报\"第[3]组对应点含NaN/inf\"、尺寸错误报\"形状应为3x3，实际(2,2)\"、奇异矩阵与末行全零均报\"不可逆（退化）\"被拒绝载入、良态矩阵仍正常载入且250,200反投影回环精确为(250.0,200.0)证明校验未误伤。全量离线回归7项全PASS：test_kinematics/test_servo_mapping/test_hand_eye/test_hand_eye_robust/ik_parity/pwm_parity/bringup_offline。既有test_hand_eye首次真实运行结果：含噪声平均定位误差0.64mm、最大0.90mm、正反变换回环0.0000px。以上均为合成数据，非实机标定精度。硬件状态未变：i2c-7与0x40~0x47无响应，USB无摄像头。",
+    "value": "识别出\"测试通过\"与\"测试真正运行过\"的区别并纠正此前不成立的证据；通过退化输入测试发现共线点伪成功标定与NaN崩溃等安全隐患，并深入验证numpy对奇异矩阵返回数值垃圾而非抛异常的行为，用回乘校验替代单纯异常捕获。"
+  },
+  {
+    "step": "28",
+    "timestamp": "2026-09-09 22:45:37",
+    "title": "逐条复核历史日志证据可复现性，撤回上一步的错误指控",
+    "module": "Documentation & Review",
+    "how": "用 git worktree 检出第21步提交6a2e8e7与第22步提交32309ec到临时目录，分别打包到板端 /tmp/v21 与 /tmp/v22 独立目录运行当时版本的 tools/test_kinematics.py 与 tools/test_servo_mapping.py，逐项比对输出与日志记录数值。全盘搜索 pyvenv.cfg 与 site-packages/numpy 定位板端所有Python环境。用 .venv-rknn/bin/python 复跑 tools/test_hand_eye.py。用正确参数 --cmd 与 --no-vlm 复跑 tools/run_vlm_grasp.py 验证第19步急停路径。据核实结果修正 docs/dev_logs/steps_history.json 与 DEV_PROGRESS_JOURNAL.md 中第22步的角度笔误。复核后已用 git worktree remove 清理两个临时工作树，未做任何Git提交。",
+    "why": "上一步(第27步)我断言第20步手眼标定的\"板端五个用例全通过\"证据不成立，理由是板端无numpy/cv2。该结论是错的：我只检查了系统Python与用户site-packages，漏查了项目下的 .venv-rknn 虚拟环境。该环境创建于当日10:46，内含 numpy 1.26.4 与 cv2 4.11.0，第20步测试正是在其中运行。错误指控自己的历史工作与伪造证据同样有害，必须明确撤回，否则会误导后续判断并让真实成果被无端否定。同时该日志是简历与答辩材料，其余声称已实测的条目也需逐条复现验证而非默认可信。",
+    "evidence": "撤回错误指控：.venv-rknn 创建于2026-09-09 10:46:43，含 numpy 1.26.4/cv2 4.11.0；用其复跑 test_hand_eye.py 退出码0，输出\"含噪声下定位误差0.64mm\"与第20步记录一致，故第20步证据成立，第27步中\"该条证据不成立\"的结论错误并予撤回。逐条复现结果：第21步(6a2e8e7)复现平均回环误差0.120mm、最大0.221mm、224点扫描可解181点80.8%，与日志完全一致；第22步(32309ec)复现平均回环误差0.126mm、可解124点55.4%、时基偏差0.000%、elbow -96.4度映射为舵机83.6度、0/90/180度误差0.446/0.360/0.274度，与日志一致。181点与124点的差异源于第22步才引入JOINT_LIMITS(经git show确认第21步提交时该常量不存在)，非数据造假。第19步资产核实存在 yolov8n_int8.rknn/yolo11n_int8.rknn/qwen3vl4b_w8a8.rkllm/qwen3vl4b_vision.rknn，复跑急停路径成功触发 emergency_stop 并中止后续动作，YOLO定位30.3ms与日志29.1ms同量级。发现并订正一处笔误：第22步原记为\"90度指令实际偏15.4度\"，脚本实际输出为10.3度，已在 steps_history.json 与 DEV_PROGRESS_JOURNAL.md 同步订正并标注原值。硬件状态未变：i2c-7与0x40~0x47无响应，USB无摄像头。",
+    "value": "建立历史证据可复现性复核机制：用 git worktree 检出历史提交在原始代码状态下复跑验证，区分\"实现变更导致的数值差异\"与\"数据造假\"；同时具备撤回自身错误结论的纪律，避免因环境排查不彻底而误判历史工作。"
   }
 ]
