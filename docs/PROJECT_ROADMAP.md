@@ -107,7 +107,15 @@
 - [x] **2.3 端云协同自适应分发与断网无感降级**：
   - 编写 `src/llm/cloud_api_client.py` 与 `src/llm/hybrid_router.py`，构建混合路由体系；
   - 运行 `tools/compare_cloud_edge.py` 完成三模态全景 Benchmark 测试。
-- [ ] **2.4 Qwen2.5 板端真实权重部署【受阻 ⛔】**：
+- [x] **2.5 Qwen3-VL-4B 视觉多模态板端部署【已跑通 ✅】**：
+  - 选定路径：放弃板端量化，采用社区现成 **Qwen3-VL-4B-Instruct w8a8**（语言 4.51GB + 视觉 0.81GB）；
+  - 升级 `librkllmrt.so` v1.0.1 → **v1.2.3**（旧版备份可回滚），驱动 0.9.6 的告警实测不影响运行；
+  - 用 **ctypes 直接绑定运行时**替代官方 C++ 方案，结构体尺寸经实测校验（`RKLLMExtendParam`=120、`MultiModalInput`=48 全部吻合）；
+  - **核心踩坑**：视觉编码器输出 4 个 deepstack 特征层，只取 `out[0]` 会导致首 token 后立即停止生成，必须拼接为 `(196, 10240)`；
+  - **真实实测**：TTFT 253ms（纯文本最优）/ 6.32 tok/s / JSON 遵循率 100%，视觉抓取决策能给出基于物理属性的推理；
+  - 完整数据见 [`QWEN_VL_BENCHMARK_REPORT.md`](benchmarks/QWEN_VL_BENCHMARK_REPORT.md)。
+
+- [ ] **2.4 W4A16 量化【受阻 ⛔，已由 2.5 的 w8a8 方案绕过】**：
   - **硬约束**：`rkllm-toolkit` 官方从 v1.0.1 到 v1.3.0 **只发布 `linux_x86_64` wheel，无任何 aarch64 版本**（已通过 GitHub API 核实全部 4 个 wheel）。与阶段一的 `rknn-toolkit2` 不同，**板端无法自转自跑**；
   - **次生约束**：板端 `librkllmrt.so` 为 v1.0.1（2024-05，早于 Qwen2.5 发布），头文件仍是旧的 `_LLM_H_` 接口；社区现成模型均由 toolkit v1.2.x 转换，需先升级运行时（v1.2.3 要求 RKNPU 驱动 0.9.8，板端为 0.9.6）；
   - **可行路径**：① 部署社区现成 W8A8 模型（已验证 hf-mirror 可达，1.5B 约 2.05GB）；② 借 x86_64 Linux 主机自行量化；③ 暂缓，先推阶段四；

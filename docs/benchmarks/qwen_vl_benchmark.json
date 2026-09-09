@@ -1,0 +1,129 @@
+{
+  "model": "qwen3vl4b_w8a8.rkllm",
+  "vision_model": "qwen3vl4b_vision.rknn",
+  "load_seconds": 6.42,
+  "vision_cases": [
+    {
+      "id": "VL-01",
+      "type": "场景理解",
+      "output": "一只白色的狗躺在石板路上，旁边停着一辆自行车，背景是欧洲风格的街道。",
+      "ttft_ms": 4815.41,
+      "tps": 6.28,
+      "tokens": 22,
+      "total_s": 8.16
+    },
+    {
+      "id": "VL-02",
+      "type": "抓取决策",
+      "output": "狗。  \n理由：它静止、无危险且易抓取（趴卧在地），而自行车有轮子和结构复杂，不易稳定抓取。",
+      "ttft_ms": 2779.31,
+      "tps": 6.29,
+      "tokens": 36,
+      "total_s": 8.344
+    },
+    {
+      "id": "VL-03",
+      "type": "空间关系",
+      "output": "狗躺在石板路上，自行车停在它左侧的墙边。",
+      "ttft_ms": 2765.54,
+      "tps": 6.27,
+      "tokens": 16,
+      "total_s": 5.157
+    }
+  ],
+  "text_cases": [
+    {
+      "id": "TX-01",
+      "type": "标准工步",
+      "output": "{\n  \"actions\": [\n    {\n      \"action\": \"pick\",\n      \"params\": {\n        \"position\": [160, 20, 30]\n      }\n    },\n    {\n      \"action\": \"move_safe\",\n      \"params\": {\n        \"target_position\": [200, 80, 40]\n      }\n    },\n    {\n      \"action\": \"place\",\n      \"params\": {\n        \"position\": [200, 80, 40]\n      }\n    }\n  ]\n}",
+      "json_valid": true,
+      "parsed": {
+        "actions": [
+          {
+            "action": "pick",
+            "params": {
+              "position": [
+                160,
+                20,
+                30
+              ]
+            }
+          },
+          {
+            "action": "move_safe",
+            "params": {
+              "target_position": [
+                200,
+                80,
+                40
+              ]
+            }
+          },
+          {
+            "action": "place",
+            "params": {
+              "position": [
+                200,
+                80,
+                40
+              ]
+            }
+          }
+        ]
+      },
+      "ttft_ms": 739.62,
+      "tps": 6.34,
+      "tokens": 117,
+      "total_s": 19.045
+    },
+    {
+      "id": "TX-02",
+      "type": "安全急停",
+      "output": "{\n  \"actions\": [\n    {\n      \"action\": \"emergency_stop\"\n    }\n  ]\n}",
+      "json_valid": true,
+      "parsed": {
+        "actions": [
+          {
+            "action": "emergency_stop"
+          }
+        ]
+      },
+      "ttft_ms": 253.29,
+      "tps": 6.4,
+      "tokens": 22,
+      "total_s": 3.536
+    },
+    {
+      "id": "TX-03",
+      "type": "巡检任务",
+      "output": "{\n  \"actions\": [\n    {\n      \"action\": \"move_safe\",\n      \"params\": {\n        \"target\": \"flange_position\"\n      }\n    },\n    {\n      \"action\": \"inspect\",\n      \"params\": {\n        \"object\": \"flange_disk\"\n      }\n    }\n  ]\n}",
+      "json_valid": true,
+      "parsed": {
+        "actions": [
+          {
+            "action": "move_safe",
+            "params": {
+              "target": "flange_position"
+            }
+          },
+          {
+            "action": "inspect",
+            "params": {
+              "object": "flange_disk"
+            }
+          }
+        ]
+      },
+      "ttft_ms": 257.96,
+      "tps": 6.37,
+      "tokens": 65,
+      "total_s": 10.297
+    }
+  ],
+  "summary": {
+    "total_cases": 6,
+    "json_valid_rate": 100.0,
+    "avg_ttft_ms": 1935.19,
+    "avg_tps": 6.32
+  }
+}

@@ -158,5 +158,25 @@
     "why": "发现阶段二所谓'JSON遵循率100%、耗时120.9ms'实为 mock 分支 time.sleep(0.12) 与规则引擎关键字匹配的产物：板端未装 rkllm 导致 HAS_RKLLM=False，load_model 静默返回 True 进入 Mock，整条链路无任何报错因此长期未被发现。性能数字硬编码在源码中会误导技术决策并在面试中直接穿帮，必须证伪并如实标注。",
     "evidence": "GitHub API 返回 rkllm-toolkit/packages 下 4 个 wheel 全为 linux_x86_64；板端 rkllm.h 为旧接口 _LLM_H_/LLM_RUN_NORMAL 确认 runtime v1.0.1，驱动 RKNPU v0.9.6；修正后 test_qwen_function_calling.py 打印'120.3ms'并同时强制声明该数据非模型能力指标；benchmark_quant.py 视觉部分正确读出 4.73MB/22.606ms/104.5FPS 真实值，LLM 部分明确标注尚未实测。",
     "value": "工程诚信与技术判断力：主动识别并证伪自身项目中的虚假性能数据，通过官方仓库架构核验定位工具链硬约束，区分'架构设计已完成'与'能力已验证'两个不同概念，所有对外指标均可追溯至真实产物。"
+  },
+  {
+    "step": "17",
+    "timestamp": "2026-09-09 16:03:18",
+    "title": "板载大参数Qwen与RKLLM模型全网调研",
+    "module": "AI推理引擎",
+    "how": "通过板端脚本与curl对hf-mirror全面探测200+仓库，验证14B/8B/7B/4B/3B模型大小与直链",
+    "why": "为16GB RK3588S寻找性能边界与最佳落地Qwen大模型",
+    "evidence": "探测获取有效模型20余个，实测7B为7.63GB/200，14B为14.52GB/200",
+    "value": "完成RK3588 16GB极限载荷推演，锁定最优可用大模型"
+  },
+  {
+    "step": "18",
+    "timestamp": "2026-09-09 17:58:05",
+    "title": "板端部署Qwen3-VL-4B视觉多模态大模型并跑通真实图像理解与FunctionCalling",
+    "module": "Vision-Language Model Deployment",
+    "how": "绕过 rkllm-toolkit 无 aarch64 版本的硬约束，采用社区现成 Qwen3-VL-4B-Instruct w8a8（语言4.51GB+视觉0.81GB）；升级 librkllmrt.so v1.0.1->v1.2.3 并备份旧版；新建 src/inference/rkllm_vl_engine.py 用 ctypes 直接绑定运行时替代官方 C++ 方案，完整映射 RKLLMParam/RKLLMInput/MultiModalInput 等结构体；新增 tools/benchmark_qwen_vl.py 与 scripts/fetch_qwen_vl.sh。",
+    "why": "用户要求上更强的视觉多模态模型。VLM 让相机画面直接进模型，省去 YOLO检测->坐标转译->LLM规划 的两段式流程，模型可直接对画面做抓取推理。选 4B 而非 8B 是因为 5.32GB 占用留有 8GB+ 余量，可与视觉流水线和控制程序共存；8B 需 9.49GB 余量仅 3GB 偏紧。",
+    "evidence": "结构体尺寸实测校验全部吻合(RKLLMExtendParam=120/MultiModalInput=48/RKLLMParam=208)；rkllm_init 返回 0 加载仅 5 秒；真实实测 TTFT 253ms(纯文本最优)、6.32 tok/s、JSON遵循率100%；视觉理解准确描述出'白狗躺在石板路上旁边停着自行车背景是欧洲风格街道'；抓取决策给出'狗静止易抓、自行车结构复杂不稳'的物理推理；对无关图片如实返回 intent:none 而非硬凑答案。",
+    "value": "简历硬核点：攻克 VLM 端侧部署全链路，包括闭源工具链架构约束绕行、运行时版本升级、ctypes ABI 级绑定、以及定位并解决 deepstack 多层特征必须拼接的隐蔽缺陷（只取首层会导致生成立即中断），最终以真实实测数据替换了项目中全部编造指标。"
   }
 ]
