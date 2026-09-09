@@ -45,6 +45,20 @@ target_link_libraries(edge_arm_control
     Threads::Threads
 )
 
+# Offline driver/kinematics regression tests. All device syscalls are replaced
+# by test doubles at link time, so ctest does not access an I2C bus or camera.
+include(CTest)
+if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(test_cpp_control tools/test_cpp_control.cpp src/kinematics.cpp)
+    target_compile_options(test_cpp_control PRIVATE -Wall -Wextra -Wpedantic)
+    target_link_options(test_cpp_control PRIVATE
+        "LINKER:--wrap=open" "LINKER:--wrap=ioctl" "LINKER:--wrap=read"
+        "LINKER:--wrap=write" "LINKER:--wrap=close" "LINKER:--wrap=usleep"
+        "LINKER:--wrap=__read_chk" # glibc fortified read, including sanitizer builds
+    )
+    add_test(NAME cpp_control_offline COMMAND test_cpp_control)
+endif()
+
 # Optional linking for RKNN runtime on aarch64
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/rknn_api/lib/librknnrt.so")
     target_link_libraries(edge_arm_control PRIVATE rknnrt)
