@@ -53,6 +53,17 @@ class SimpleArmKinematics(KinematicsBase):
     # 肩关节到目标的最小距离，低于此值视为过近死区（小臂对折会撞底座）
     MIN_DIST_MM = 1e-3
 
+    # 各关节的 IK 几何角有效范围（度）。
+    # 这是**舵机物理行程**倒推出来的约束：数学上可解不代表舵机转得到。
+    # 与 I2CArmController.DEFAULT_JOINT_CALIB 的 offset/direction 对应：
+    #   舵机角 = offset + direction * ik_角  ∈ [0, 180]
+    JOINT_LIMITS = [
+        (-90.0,  90.0),    # 关节0 底座:  offset 90  → 舵机 [0,180]
+        (-90.0,  90.0),    # 关节1 大臂:  offset 90  → 舵机 [0,180]
+        (-180.0,  0.0),    # 关节2 小臂:  offset 180 → 舵机 [0,180]
+        (-90.0,  90.0),    # 关节3 腕部:  offset 90  → 舵机 [0,180]
+    ]
+
     def inverse_kinematics(self, target_pose: Dict[str, float], current_joints: Optional[List[float]] = None) -> Optional[List[float]]:
         """
         几何解析逆解（带工作空间边界检查）
@@ -112,5 +123,20 @@ class SimpleArmKinematics(KinematicsBase):
         # 6. 腕部保持末端水平：抵消前两轴的累计俯仰
         wrist_deg = -(shoulder_deg + elbow_deg)
 
-        return [round(base_deg, 1), round(shoulder_deg, 1),
-                round(elbow_deg, 1), round(wrist_deg, 1)]
+        result = [round(base_deg, 1), round(shoulder_deg, 1),
+                  round(elbow_deg, 1), round(wrist_deg, 1)]
+
+        # 7. 关节物理限位检查
+        #    数学上有解 ≠ 舵机转得到。此处提前拒绝，避免把越界角度
+        #    交给控制器兜底 —— 那样上层无法区分"不可达"与"下发失败"。
+        for idx, ang in enumerate(result):
+            if idx >= len(self.JOINT_LIMITS):
+                break
+            lo, hi = self.JOINT_LIMITS[idx]
+            if not (lo <= ang <= hi):
+                self.last_reject_reason = (
+                    f"关节{idx} 需转到 {ang:.1f}°，超出物理行程 "
+                    f"[{lo:.0f}, {hi:.0f}]（目标虽在臂展内但姿态不可达）")
+                return None
+
+        return result
