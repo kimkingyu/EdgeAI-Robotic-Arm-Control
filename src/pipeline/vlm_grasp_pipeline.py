@@ -57,6 +57,7 @@ class VLMGraspPipeline:
         self.vlm = None
         self.controller = None
         self.kinematics = None
+        self.hand_eye = None
 
         self.stats: Dict[str, Any] = {
             "frames_captured": 0,
@@ -76,6 +77,7 @@ class VLMGraspPipeline:
         ok &= self._setup_camera()
         ok &= self._setup_detector()
         ok &= self._setup_arm()
+        ok &= self._setup_hand_eye()
         ok &= self._setup_vlm()
 
         print("-" * 70)
@@ -137,6 +139,20 @@ class VLMGraspPipeline:
             print("[机械臂] 控制器已连接")
         else:
             print("[机械臂] 硬件未就绪 → Mock 模式（动作仅打印不下发）")
+        return True
+
+    def _setup_hand_eye(self) -> bool:
+        try:
+            from src.vision.hand_eye import HandEyeCalibrator
+            path = self.config.get("hand_eye", {}).get(
+                "calib_path", "configs/hand_eye_calib.json")
+            self.hand_eye = HandEyeCalibrator(path)
+            if not self.hand_eye.load():
+                print(f"[手眼] 未找到标定文件 {path} → 暂用线性近似")
+                print("       实机抓取前请先运行标定：tools/calibrate_hand_eye.py")
+        except Exception as e:
+            print(f"[手眼] 初始化异常: {str(e)[:80]}")
+            self.hand_eye = None
         return True
 
     def _setup_vlm(self) -> bool:
@@ -262,17 +278,19 @@ class VLMGraspPipeline:
         """
         手眼标定：像素 (u,v) → 机械臂基座 (X,Y,Z)
 
-        当前为线性近似占位，真实标定矩阵需相机到货后用标定板测定，
-        参数存于 config 的 hand_eye 段。
+        优先使用标定文件中的单应矩阵（含噪声下实测定位误差 0.64mm）；
+        若尚未标定，退化为线性近似——**仅供离线联调，不可用于实机抓取**。
         """
+        if self.hand_eye is not None and self.hand_eye.is_calibrated:
+            r = self.hand_eye.pixel_to_robot(px, py)
+            if r is not None:
+                return r
+
         he = self.config.get("hand_eye", {})
         scale = he.get("mm_per_pixel", 0.5)
-        cx = he.get("center_u", 320)
-        cy = he.get("center_v", 240)
-        base_x = he.get("base_x", 150.0)
         return {
-            "x": base_x + (py - cy) * scale,
-            "y": (px - cx) * scale,
+            "x": he.get("base_x", 150.0) + (py - he.get("center_v", 240)) * scale,
+            "y": (px - he.get("center_u", 320)) * scale,
             "z": self.config.get("pipeline", {}).get("grasp_z_height", 30.0),
         }
 
