@@ -64,8 +64,12 @@ class HandEyeCalibrator:
             print("[HandEye] 缺少 numpy / opencv，无法标定")
             return False
 
-        src = np.asarray(pixel_pts, dtype=np.float64).reshape(-1, 2)
-        dst = np.asarray(robot_pts, dtype=np.float64).reshape(-1, 2)
+        try:
+            src = np.asarray(pixel_pts, dtype=np.float64).reshape(-1, 2)
+            dst = np.asarray(robot_pts, dtype=np.float64).reshape(-1, 2)
+        except (ValueError, TypeError) as e:
+            print(f"[HandEye] 输入点格式非法: {str(e)[:80]}")
+            return False
 
         if len(src) != len(dst):
             print(f"[HandEye] 点数不匹配: 像素 {len(src)} vs 物理 {len(dst)}")
@@ -73,6 +77,24 @@ class HandEyeCalibrator:
         if len(src) < 4:
             print(f"[HandEye] 至少需要 4 组对应点，当前 {len(src)} 组")
             return False
+
+        # 非有限值必须在进入求解前拦截：示教时漏填或读数异常会带进 NaN/inf，
+        # cv2 求解后 np.linalg.inv 抛 LinAlgError 直接中断整个标定流程，
+        # 现场只看到一个栈回溯，无法知道是哪组点录错了。
+        if not (np.all(np.isfinite(src)) and np.all(np.isfinite(dst))):
+            bad = [i for i in range(len(src))
+                   if not (np.all(np.isfinite(src[i])) and np.all(np.isfinite(dst[i])))]
+            print(f"[HandEye] 第 {bad} 组对应点含 NaN/inf，请检查示教记录")
+            return False
+
+        # 共线检测：共线点无法确定平面射影变换。cv2 仍可能返回一个退化矩阵，
+        # 且其 RMS 重投影误差会是 0.000mm —— 看起来"标定完美"，
+        # 实机却会把画面上任意一点都映射到同一条直线上，抓取必然失败。
+        for name, pts in (("像素", src), ("物理", dst)):
+            if self._is_degenerate(pts):
+                print(f"[HandEye] {name}点近似共线或重合，无法确定平面变换；"
+                      f"请让标记点在工作平面上散开成二维分布")
+                return False
 
         # 点数 > 4 时用 RANSAC 抑制单点示教误差；恰好 4 点则直接精确求解
         if len(src) > 4:
@@ -87,9 +109,17 @@ class HandEyeCalibrator:
         if H is None:
             print("[HandEye] 单应矩阵求解失败（点可能共线或退化）")
             return False
+        if not np.all(np.isfinite(H)):
+            print("[HandEye] 求解结果含 NaN/inf，标定无效")
+            return False
+
+        H_inv = self._safe_inverse(H)
+        if H_inv is None:
+            print("[HandEye] 求得的矩阵不可逆（退化解），标定无效")
+            return False
 
         self.H = H
-        self.H_inv = np.linalg.inv(H)
+        self.H_inv = H_inv
         self.z_plane = float(z_plane)
         self.n_points = len(src)
         self.rms_error = self._compute_rms(src, dst)
@@ -99,6 +129,50 @@ class HandEyeCalibrator:
         if self.rms_error > 5.0:
             print("           ⚠ 误差偏大，建议检查示教精度或增加标记点")
         return True
+
+    @staticmethod
+    def _is_degenerate(pts: "np.ndarray", tol: float = 1e-6) -> bool:
+        """
+        判断点集是否近似共线/重合。
+
+        做法：去均值后取协方差矩阵的两个特征值，若较小的那个相对较大的
+        可以忽略，说明点几乎落在一条直线上（或全部重合）。
+        用相对比值而非绝对阈值，才能同时适用于像素(数百)与毫米(数十)量级。
+        """
+        if len(pts) < 4:
+            return True
+        centered = pts - pts.mean(axis=0)
+        scale = np.abs(centered).max()
+        if scale < tol:            # 所有点重合
+            return True
+        centered = centered / scale
+        eigenvalues = np.linalg.eigvalsh(centered.T @ centered)
+        largest = float(eigenvalues[-1])
+        smallest = float(eigenvalues[0])
+        if largest <= tol:
+            return True
+        return smallest / largest < 1e-8
+
+    @staticmethod
+    def _safe_inverse(M: "np.ndarray") -> Optional["np.ndarray"]:
+        """
+        求逆并验证结果确实是逆矩阵。
+
+        只捕获 LinAlgError 是不够的：对 [[1,2,3],[2,4,6],[3,6,9]] 这类
+        秩为 1 的矩阵，numpy 不抛异常而是返回元素达 1e16 的数值垃圾，
+        且每个元素都是"有限值"，能通过 isfinite 检查。
+        实测该结果的 M@inv 偏离单位阵达 3.0，用它做反投影得到的像素坐标
+        毫无意义。因此必须回乘校验。
+        """
+        try:
+            inv = np.linalg.inv(M)
+        except np.linalg.LinAlgError:
+            return None
+        if not np.all(np.isfinite(inv)):
+            return None
+        # 回乘校验：容差按矩阵量级放宽，避免对良态矩阵误判
+        residual = np.abs(M @ inv - np.eye(3)).max()
+        return inv if residual < 1e-6 else None
 
     def _compute_rms(self, src: "np.ndarray", dst: "np.ndarray") -> float:
         """标定质量自检：把像素点正向映射后与实测物理坐标比对"""
@@ -167,8 +241,22 @@ class HandEyeCalibrator:
         try:
             with open(p, "r", encoding="utf-8") as f:
                 d = json.load(f)
-            self.H = np.asarray(d["homography"], dtype=np.float64)
-            self.H_inv = np.linalg.inv(self.H)
+            H = np.asarray(d["homography"], dtype=np.float64)
+            # 标定文件可能被手工编辑或截断。必须在此校验形状与数值，
+            # 否则错误会推迟到 pixel_to_robot 才以 ValueError 爆出来 ——
+            # 那时机械臂已经在执行抓取流程了。
+            if H.shape != (3, 3):
+                print(f"[HandEye] 载入失败: 单应矩阵形状应为 3x3，实际 {H.shape}")
+                return False
+            if not np.all(np.isfinite(H)):
+                print("[HandEye] 载入失败: 单应矩阵含 NaN/inf")
+                return False
+            H_inv = self._safe_inverse(H)
+            if H_inv is None:
+                print("[HandEye] 载入失败: 单应矩阵不可逆（退化）")
+                return False
+            self.H = H
+            self.H_inv = H_inv
             self.z_plane = float(d.get("z_plane", 30.0))
             self.n_points = int(d.get("n_points", 0))
             self.rms_error = d.get("rms_error_mm")
