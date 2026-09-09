@@ -57,6 +57,11 @@ if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         "LINKER:--wrap=__read_chk" # glibc fortified read, including sanitizer builds
     )
     add_test(NAME cpp_control_offline COMMAND test_cpp_control)
+
+    # 手眼变换导出程序，供 tools/test_handeye_parity.py 做跨语言比对
+    add_executable(handeye_dump tools/handeye_dump.cpp)
+    target_compile_options(handeye_dump PRIVATE -Wall -Wextra)
+    target_link_libraries(handeye_dump PRIVATE ${OpenCV_LIBS})
 endif()
 
 # Optional linking for RKNN runtime on aarch64
