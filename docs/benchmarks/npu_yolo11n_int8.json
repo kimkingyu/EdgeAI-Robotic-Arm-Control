@@ -1,0 +1,38 @@
+{
+  "model": "models/weights/yolo11n_int8.rknn",
+  "input_shape": [
+    1,
+    640,
+    640,
+    3
+  ],
+  "rounds": 300,
+  "results": [
+    {
+      "mode": "single",
+      "desc": "单核基线",
+      "core_mask": "NPU_CORE_0",
+      "avg_ms": 27.485,
+      "min_ms": 25.001,
+      "max_ms": 31.256,
+      "p50_ms": 27.217,
+      "p99_ms": 30.334,
+      "std_ms": 0.953,
+      "fps": 36.38,
+      "rounds": 300
+    },
+    {
+      "mode": "auto",
+      "desc": "驱动自动调度",
+      "core_mask": "NPU_CORE_AUTO",
+      "avg_ms": 27.302,
+      "min_ms": 24.732,
+      "max_ms": 29.86,
+      "p50_ms": 27.233,
+      "p99_ms": 29.679,
+      "std_ms": 0.575,
+      "fps": 36.63,
+      "rounds": 300
+    }
+  ]
+}

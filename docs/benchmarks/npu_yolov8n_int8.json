@@ -1,0 +1,64 @@
+{
+  "model": "models/weights/yolov8n_int8.rknn",
+  "input_shape": [
+    1,
+    640,
+    640,
+    3
+  ],
+  "rounds": 300,
+  "results": [
+    {
+      "mode": "single",
+      "desc": "单核基线",
+      "core_mask": "NPU_CORE_0",
+      "avg_ms": 23.233,
+      "min_ms": 20.135,
+      "max_ms": 27.483,
+      "p50_ms": 22.835,
+      "p99_ms": 27.453,
+      "std_ms": 1.485,
+      "fps": 43.04,
+      "rounds": 300
+    },
+    {
+      "mode": "dual",
+      "desc": "双核并发",
+      "core_mask": "NPU_CORE_0_1",
+      "avg_ms": 22.804,
+      "min_ms": 19.907,
+      "max_ms": 25.687,
+      "p50_ms": 22.989,
+      "p99_ms": 25.337,
+      "std_ms": 0.904,
+      "fps": 43.85,
+      "rounds": 300
+    },
+    {
+      "mode": "triple",
+      "desc": "三核满血负载均衡",
+      "core_mask": "NPU_CORE_0_1_2",
+      "avg_ms": 23.043,
+      "min_ms": 20.07,
+      "max_ms": 49.375,
+      "p50_ms": 23.028,
+      "p99_ms": 25.734,
+      "std_ms": 1.797,
+      "fps": 43.4,
+      "rounds": 300
+    },
+    {
+      "mode": "auto",
+      "desc": "驱动自动调度",
+      "core_mask": "NPU_CORE_AUTO",
+      "avg_ms": 22.606,
+      "min_ms": 20.276,
+      "max_ms": 25.387,
+      "p50_ms": 22.807,
+      "p99_ms": 24.053,
+      "std_ms": 0.648,
+      "fps": 44.24,
+      "rounds": 300
+    }
+  ]
+}

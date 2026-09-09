@@ -1,0 +1,9 @@
+{
+  "onnx": "models/weights/yolov8n_op19.onnx",
+  "output": "models/weights/yolov8n_int8.rknn",
+  "quantized": true,
+  "algorithm": "normal",
+  "build_seconds": 78.81,
+  "size_mb": 4.73,
+  "success": true
+}

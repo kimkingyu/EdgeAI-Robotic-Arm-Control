@@ -231,3 +231,41 @@ PROJECT_ROADMAP.md 包含完整 ASCII 端云架构图与各阶段验收标准；
 > 💡 **亮点提炼**：项目管理与架构规划：具备顶层系统架构设计、复杂软硬件协同工程分解与技术演进推进能力。
 
 ---
+
+## 📍 第 13 步：下载板端YOLOv8n与YOLOv11n模型及COCO128量化校准数据集
+* **记录时间**：`2026-09-09 10:49:20` ｜ **技术模块**：`[模型部署/量化资产]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+通过SSH调用curl，经ghfast镜像加速下载yolov8n.onnx与yolo11n.onnx到models/weights/；下载解压coco128获取100张校准图并生成dataset.txt
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+为后续RK3588S RKNPU2平台的INT8后量化与精度校准准备基准ONNX权重与输入校准集
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+models/weights包含yolov8n.onnx(13MB)与yolo11n.onnx(11MB)；images包含100张jpg；dataset.txt记录100条相对路径
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：实现板端量化数据资产自动化部署，解决嵌入式开发板网络受限场景下的模型加速下载与数据集规范化管理
+
+---
+
+## 📍 第 14 步：打通板端RKNN原生工具链并完成YOLO INT8量化与三核并发推理加速
+* **记录时间**：`2026-09-09 11:18:42` ｜ **技术模块**：`[NPU Quantization & Inference Acceleration]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+板端直装 rknn-toolkit2 2.3.2 aarch64 原生 wheel 推翻双机转换方案，librknnrt.so 由 0.9.6 升级至 2.3.2；修复 opset20/22 超限、校准集路径二次拼接、YOLOv11 动态形状三处硬伤后完成 INT8 PTQ 量化；新增 tools/benchmark_npu.py 与 tools/benchmark_npu_parallel.py，交付 scripts/set_performance.sh 全线锁频；重构 src/inference/rknn_engine.py 新增 RKNNParallelVisionPool 每核独立实例多线程推理池。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+实测证伪了 core_mask=NPU_CORE_0_1_2 即可多核加速的常见误解——因 RKNNLite.inference() 是同步阻塞调用，单实例三核仅 1.03x 加速；必须每核心独立实例配合多线程并发才能榨出 6 TOPS 真实算力。另定位到瓶颈不在 NPU（满频 1GHz 温度仅 46 度）而在 CPU 侧输入拷贝与输出反量化被 ondemand 压在 1.2GHz。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+YOLOv8n 12.2MB->4.73MB 压缩61.2%，算子直通率 97.46%(115/118) 纯计算算子零回退；锁频后单帧 29.60ms->23.23ms(-21.5%) P99抖动 5.94ms->0.65ms(-89%)；三核并发 38.5->104.5 FPS 达成 2.71x 线性加速，生产封装实跑 112.99 FPS。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：简历硬核点：精通 RKNPU 算子级性能剖析与硬件亲和力评估、INT8 训练后量化工程落地、多核 NPU 并发推理池架构设计与 SoC 级调频调优，全部结论由板端实测数据支撑而非理论推算。
+
+---

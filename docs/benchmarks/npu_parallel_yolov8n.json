@@ -1,0 +1,48 @@
+{
+  "model": "models/weights/yolov8n_int8.rknn",
+  "rounds_per_worker": 150,
+  "results": [
+    {
+      "parallel_workers": 1,
+      "cores": [
+        "NPU_CORE_0"
+      ],
+      "total_frames": 150,
+      "wall_seconds": 3.896,
+      "system_fps": 38.5,
+      "per_stream_avg_ms": 23.31,
+      "per_stream_fps": 42.9,
+      "p99_ms": 25.398,
+      "desc": "1 路 (单核独占)"
+    },
+    {
+      "parallel_workers": 2,
+      "cores": [
+        "NPU_CORE_0",
+        "NPU_CORE_1"
+      ],
+      "total_frames": 300,
+      "wall_seconds": 3.969,
+      "system_fps": 75.6,
+      "per_stream_avg_ms": 23.512,
+      "per_stream_fps": 42.53,
+      "p99_ms": 26.171,
+      "desc": "2 路 (双核并行)"
+    },
+    {
+      "parallel_workers": 3,
+      "cores": [
+        "NPU_CORE_0",
+        "NPU_CORE_1",
+        "NPU_CORE_2"
+      ],
+      "total_frames": 450,
+      "wall_seconds": 4.306,
+      "system_fps": 104.5,
+      "per_stream_avg_ms": 24.946,
+      "per_stream_fps": 40.09,
+      "p99_ms": 31.543,
+      "desc": "3 路 (三核全开)"
+    }
+  ]
+}
