@@ -105,8 +105,13 @@ class PCA9685:
             self.last_clip_warning = None
 
         pulse_us = min_us + (angle / 180.0) * (max_us - min_us)
-        # 用芯片真实周期换算，而非 1/50Hz 的理论值
-        ticks = int(pulse_us * 4096.0 / self.period_us)
+        # 用芯片真实周期换算，而非 1/50Hz 的理论值。
+        # 用四舍五入而非截断：截断会系统性偏短约半个 tick(约2.7us)。
+        # 但不能用内置 round —— 它是银行家舍入(四舍六入五成双)，而 C++ 侧
+        # std::round 是"五入且远离零"。实测 108° 恰好算得 312.5 ticks，
+        # 两者分别给出 312 与 313，同一角度差 1 tick(约0.49°)。
+        # 用 floor(x+0.5) 复现 std::round 语义（此处被除数恒为正）。
+        ticks = int(math.floor(pulse_us * 4096.0 / self.period_us + 0.5))
         ticks = max(0, min(4095, ticks))
         self.set_pwm(channel, 0, ticks)
         return True

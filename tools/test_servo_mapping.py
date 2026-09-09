@@ -26,10 +26,10 @@ from src.kinematics import SimpleArmKinematics
 
 
 def ticks_of(angle, min_us=500, max_us=2500, period_us=20000.0):
-    """按被测实现的公式复算 tick，用于独立比对"""
+    """按被测实现的公式复算 tick，用于独立比对（四舍五入，与实现一致）"""
     a = max(0.0, min(180.0, angle))
     pulse = min_us + (a / 180.0) * (max_us - min_us)
-    return int(pulse * 4096.0 / period_us)
+    return int(round(pulse * 4096.0 / period_us))
 
 
 def main():
@@ -156,7 +156,7 @@ def main():
     print(f"  set_pwm_freq(50) 后 period_us = {p2.period_us:.1f} us")
     for ang, want_us in ((0.0, 500.0), (90.0, 1500.0), (180.0, 2500.0)):
         pulse = 500 + (ang / 180.0) * 2000
-        ticks = int(pulse * 4096.0 / p2.period_us)
+        ticks = int(round(pulse * 4096.0 / p2.period_us))
         real_us = ticks * p2.period_us / 4096.0
         err_deg = abs(real_us - want_us) / 2000.0 * 180.0
         good = err_deg < 0.5
