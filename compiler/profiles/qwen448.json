@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "name": "qwen448",
+  "status": "experimental_specification_not_compiled",
+  "semantic_version": "linear_half_pixel_q11_v1",
+  "source": {"dtype": "uint8", "color": "BGR", "layout": "HWC", "channels": 3, "max_height": 8192, "max_width": 8192, "pixel_stride": 3, "channel_stride": 1, "row_stride": "positive"},
+  "destination": {"dtype": "uint8", "color": "RGB", "layout": "HWC", "height": 448, "width": 448, "channels": 3, "contiguous": true, "caller_owned": true, "overlap_with_source": false},
+  "resize": {"method": "bilinear", "coordinate_transform": "half_pixel", "border": "replicate", "coefficient_bits": 11, "coefficient_rounding": "floor(alpha * 2048 + 0.5)", "accumulator_rounding": "floor((sum + 2097152) / 4194304)"},
+  "application_input": {"dtype": "uint8", "layout": "NHWC", "shape": [1, 448, 448, 3], "batch_is_view": true, "external_normalization": "none", "external_transpose": false},
+  "model": {"filename": "qwen3vl4b_vision.rknn", "sha256": "09732070437f63e04ca6ce8194d6f893e3c5acee05d6d4ed125720e0b2084b83", "queried_input_type": "FP16", "queried_input_layout": "NHWC", "real_runtime_input_accepted": true, "internal_normalization": "not_independently_verified"},
+  "evidence": "docs/benchmarks/mlir_m0_contract.json",
+  "opencv_compatibility": {"reference": "4.11.0 INTER_LINEAR", "max_abs_error_limit": 1, "verified": false},
+  "model_accuracy_verified": false,
+  "note": "Acceptance establishes only the existing application's buffer compatibility. It does not validate vendor training preprocessing or accuracy. No new normalization; optional integration requires separate numerical and real encoder A/B validation."
+}

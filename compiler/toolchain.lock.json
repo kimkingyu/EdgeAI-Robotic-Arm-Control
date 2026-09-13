@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "llvm": {
+    "repository": "llvm/llvm-project",
+    "tag": "llvmorg-20.1.8",
+    "commit": "87f0227cb60147a26a1eeb4fb06e3b505e9c7261",
+    "source_archive": "llvm-project-20.1.8.src.tar.xz",
+    "source_directory": "llvm-project-20.1.8.src",
+    "release_asset_id": 271383182,
+    "source_bytes": 147242952,
+    "source_sha256": "6898f963c8e938981e6c4a302e83ec5beb4630147c7311183cf61069af16333d",
+    "target_triple": "aarch64-unknown-linux-gnu",
+    "build_type": "Release",
+    "generator": "Unix Makefiles",
+    "projects": ["mlir", "clang"],
+    "targets": ["AArch64"],
+    "tools": ["mlir-opt", "mlir-translate", "llc", "FileCheck"],
+    "parallel_jobs": 2
+  },
+  "rknn_header": {
+    "repository": "airockchip/rknn-toolkit2",
+    "commit": "59a913d172e7f5ff03c9076e2ec7b1b1288ffd08",
+    "path": "rknpu2/runtime/Linux/librknn_api/include/rknn_api.h",
+    "sha256": "c48e11a6f41b451a5fd1e4ad774ea60252d3d94f78bee9b21ea3d21b21deba9a"
+  },
+  "baseline_python": {"python": "3.10.12", "numpy": "1.26.4", "opencv": "4.11.0"},
+  "boundary": "Native aarch64 build in isolated user directory; no system install; no RKNN environment changes. This lock is not evidence that LLVM has already been built."
+}

@@ -1,0 +1,30 @@
+// Run by preprocess_pass_checks.py against real edge-opt / FileCheck outputs.
+// FUSE: tensor.generate
+// FUSE: arith.subi {{.*}} : index
+// FUSE: edge.fused, edge.resize = "linear_half_pixel_q11_v1"
+// FUSE-NOT: linalg.generic
+// FUSE: bufferization.materialize_in_destination
+// FUSE-NOT: linalg.generic
+
+// DPS-NOT: tensor.generate
+// DPS: bufferization.to_tensor {{.*}} restrict writable
+// DPS: linalg.generic
+// DPS: edge.fused
+// DPS: linalg.index 0
+// DPS: linalg.index 1
+// DPS: linalg.index 2
+// DPS: bufferization.materialize_in_destination {{.*}} in writable
+// DPS-NOT: tensor.generate
+
+// DEST: tensor.generate
+// DEST: bufferization.to_tensor {{.*}} restrict writable
+// DEST: linalg.generic
+// DEST: bufferization.materialize_in_destination {{.*}} in writable
+
+// BUFFER-NOT: memref.alloc
+// BUFFER-NOT: memref.copy
+// BUFFER-NOT: memref.dealloc
+// BUFFER: func.func
+// BUFFER-NOT: memref.alloc
+// BUFFER-NOT: memref.copy
+// BUFFER-NOT: memref.dealloc
