@@ -1,0 +1,335 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "scope": "M3 pass legality; not performance",
+  "created_utc": "2026-09-13T09:34:43.558928+00:00",
+  "seed_sha256": "c1dcf7c8e529b312b5f5924d92039a6bc35a5b668d2d8fd73c969ebbfbc1b98d",
+  "checks_sha256": "3de58e4aacd28d3e3bb2e33c0a1be9678d1b8ea15261fe5c07e872798836de56",
+  "script_sha256": "05647d2803298d5975b92a302fb96429cbd3202897c3906a37ef337bd0328345",
+  "positive": [
+    {
+      "case": "fuse",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "prefix": "FUSE",
+      "filecheck_returncode": 0,
+      "filecheck_stderr": ""
+    },
+    {
+      "case": "fused_destination",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "prefix": "DPS",
+      "filecheck_returncode": 0,
+      "filecheck_stderr": "",
+      "bufferized_filecheck_returncode": 0
+    },
+    {
+      "case": "destination_only",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "prefix": "DEST",
+      "filecheck_returncode": 0,
+      "filecheck_stderr": ""
+    }
+  ],
+  "negative": [
+    {
+      "case": "channel_map_identity",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "normalizing_body",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "yield_destination",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "reduction_iterator",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "nearest_neighbor_resize",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "double_rounding",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "truncating_division",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "signed_pixel_extension",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "wrong_semantic_version",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "missing_color_attribute",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "unknown_color_attribute",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "writable_input_tensor",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "multiple_resize_consumers",
+      "flags": [
+        "--edge-fuse-resize-color"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "channel_map_identity",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "normalizing_body",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "yield_destination",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "reduction_iterator",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "nearest_neighbor_resize",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "double_rounding",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "truncating_division",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "signed_pixel_extension",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "wrong_semantic_version",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "missing_color_attribute",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "unknown_color_attribute",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "writable_input_tensor",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "multiple_color_consumers",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "side_effect_between_producer_and_anchor",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "destination_without_restrict",
+      "flags": [
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "channel_map_identity",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "normalizing_body",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "yield_destination",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "reduction_iterator",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "nearest_neighbor_resize",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "double_rounding",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "truncating_division",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "signed_pixel_extension",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "wrong_semantic_version",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "missing_color_attribute",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "unknown_color_attribute",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    },
+    {
+      "case": "writable_input_tensor",
+      "flags": [
+        "--edge-fuse-resize-color",
+        "--edge-prepare-preprocess-destination"
+      ],
+      "ir_changed": false
+    }
+  ],
+  "finished_utc": "2026-09-13T09:34:47.207789+00:00"
+}

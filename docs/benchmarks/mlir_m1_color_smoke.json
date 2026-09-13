@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "stage": "M1 color-only AOT smoke",
+  "status": "passed",
+  "started_utc": "2026-09-12T18:54:30.348351+00:00",
+  "commands": [
+    {
+      "label": "version-mlir-opt",
+      "argv": [
+        "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/mlir-opt",
+        "--version"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/version-mlir-opt.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "version-mlir-translate",
+      "argv": [
+        "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/mlir-translate",
+        "--version"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/version-mlir-translate.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "version-llc",
+      "argv": [
+        "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/llc",
+        "--version"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/version-llc.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "version-edge-opt",
+      "argv": [
+        "/home/orangepi/project/edgeai-mlir-work/build/compiler/bin/edge-opt",
+        "--version"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/version-edge-opt.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "lower",
+      "argv": [
+        "/home/orangepi/project/edgeai-mlir-work/build/compiler/bin/edge-opt",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/01-color.mlir",
+        "--convert-scf-to-cf",
+        "--convert-cf-to-llvm",
+        "--finalize-memref-to-llvm",
+        "--convert-arith-to-llvm",
+        "--convert-func-to-llvm",
+        "--reconcile-unrealized-casts",
+        "-o",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/02-llvm.mlir"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/lower.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "translate",
+      "argv": [
+        "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/mlir-translate",
+        "--mlir-to-llvmir",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/02-llvm.mlir",
+        "-o",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/03-color.ll"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/translate.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "object",
+      "argv": [
+        "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/llc",
+        "-mtriple=aarch64-unknown-linux-gnu",
+        "-mcpu=generic",
+        "-relocation-model=pic",
+        "-O2",
+        "-filetype=obj",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/03-color.ll",
+        "-o",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/04-color.o"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/object.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "assembly",
+      "argv": [
+        "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/llc",
+        "-mtriple=aarch64-unknown-linux-gnu",
+        "-mcpu=generic",
+        "-relocation-model=pic",
+        "-O2",
+        "-filetype=asm",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/03-color.ll",
+        "-o",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/04-color.s"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/assembly.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "link-library",
+      "argv": [
+        "/usr/bin/g++",
+        "-std=c++17",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-fPIC",
+        "-shared",
+        "/home/orangepi/project/edgeai-mlir-work/compiler/tests/color_smoke_abi.cpp",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/04-color.o",
+        "-Wl,-z,defs",
+        "-o",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/libedge_color_smoke.so"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/link-library.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "link-cpp-test",
+      "argv": [
+        "/usr/bin/g++",
+        "-std=c++17",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-DEDGEAI_COLOR_SMOKE_MAIN",
+        "/home/orangepi/project/edgeai-mlir-work/compiler/tests/color_smoke_abi.cpp",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/04-color.o",
+        "-o",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/color_smoke"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/link-cpp-test.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "cpp-test",
+      "argv": [
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/color_smoke"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/cpp-test.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "python-test",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/orangepi/project/edgeai-mlir-work/compiler/tests/color_smoke_checks.py",
+        "--library",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/libedge_color_smoke.so"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/python-test.log",
+      "status": "passed",
+      "returncode": 0
+    },
+    {
+      "label": "dynamic-dependencies",
+      "argv": [
+        "/usr/bin/readelf",
+        "-d",
+        "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/libedge_color_smoke.so"
+      ],
+      "log": "/home/orangepi/project/edgeai-mlir-work/build/m1-color-smoke/dynamic-dependencies.log",
+      "status": "passed",
+      "returncode": 0
+    }
+  ],
+  "source_sha256": {
+    "compiler/tests/color_smoke.mlir": "944111ff6b3e5396989b3e7c3696a97ac33fa1e99fef4cbdd916f721c29f647e",
+    "compiler/tests/color_smoke_abi.cpp": "1caed8016a56d0fe53e9ae07f47598031f6fdb557bba0087242836bffa3be09d",
+    "compiler/tests/color_smoke_checks.py": "eb3edf5ea8648086378d4ef143458ab4bbe757ddc4a8dacb1cf5e0b4b88fc1c6"
+  },
+  "production_resize_implemented": false,
+  "artifacts": {
+    "01-color.mlir": {
+      "sha256": "944111ff6b3e5396989b3e7c3696a97ac33fa1e99fef4cbdd916f721c29f647e",
+      "bytes": 1264
+    },
+    "02-llvm.mlir": {
+      "sha256": "c4fa445777ee212a1f89b37ce0190ba19205a0469832e7465aacba4b0207fc64",
+      "bytes": 8712
+    },
+    "03-color.ll": {
+      "sha256": "1af0bf51848928d38aa7ddda06e3dfa3ecc9e58e9c6e95239de065c7a33a35b7",
+      "bytes": 6127
+    },
+    "04-color.o": {
+      "sha256": "83a89abd72dee147d3667b7dcc02707ebe6339254ff4a90ce437e8c8a03f8cfe",
+      "bytes": 1192
+    },
+    "04-color.s": {
+      "sha256": "4320ab631c178c39cd14353d17282189fb7ebcd35f9628fcf813bfcc05f86fc3",
+      "bytes": 2364
+    },
+    "libedge_color_smoke.so": {
+      "sha256": "343b8b7e8fea34cf85086d76cce77fa9128b630f205928728f1e1099a41354d8",
+      "bytes": 8600
+    },
+    "color_smoke": {
+      "sha256": "5db59c7f0921137bfe89fb270e8e0539a1ee473a504efd472187c78fe008acc2",
+      "bytes": 14608
+    }
+  },
+  "finished_utc": "2026-09-12T18:54:32.710922+00:00"
+}

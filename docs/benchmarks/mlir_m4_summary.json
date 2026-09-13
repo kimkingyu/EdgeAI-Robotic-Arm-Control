@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "stage": "M4",
+  "status": "measured",
+  "headline": "No MLIR schedule beat the OpenCV baseline; tiling made it worse and vectorization only recovered to roughly the fused level.",
+  "kernels_built": 52,
+  "kernels_not_applicable": 8,
+  "correctness": {
+    "variants_checked": 52,
+    "inputs_per_variant": 36,
+    "repeats_per_input": 3,
+    "mlir_outputs_differing_from_reference": 0
+  },
+  "timing": {
+    "640": {
+      "opencv_p50_us": 4270.5,
+      "input_shape": [
+        480,
+        640
+      ],
+      "variants": {
+        "unfused": {
+          "p50_us": 23208.9,
+          "p99_us": 23268.1,
+          "p50_ratio_vs_opencv": 5.435
+        },
+        "fused": {
+          "p50_us": 22414.8,
+          "p99_us": 22624.5,
+          "p50_ratio_vs_opencv": 5.249
+        },
+        "destination_only": {
+          "p50_us": 21083.4,
+          "p99_us": 21125.5,
+          "p50_ratio_vs_opencv": 4.937
+        },
+        "fused_destination": {
+          "p50_us": 19168.7,
+          "p99_us": 19197.9,
+          "p50_ratio_vs_opencv": 4.489
+        },
+        "tile_1x16": {
+          "p50_us": 23824.3,
+          "p99_us": 23864.9,
+          "p50_ratio_vs_opencv": 5.579
+        },
+        "tile_4x32": {
+          "p50_us": 29443.8,
+          "p99_us": 30034.0,
+          "p50_ratio_vs_opencv": 6.895
+        },
+        "tile_8x64": {
+          "p50_us": 28588.0,
+          "p99_us": 28690.9,
+          "p50_ratio_vs_opencv": 6.694
+        },
+        "tile_1x128": {
+          "p50_us": 23659.3,
+          "p99_us": 23687.1,
+          "p50_ratio_vs_opencv": 5.54
+        },
+        "tile_1x16_vector_packed_source": {
+          "p50_us": 20182.3,
+          "p99_us": 20391.3,
+          "p50_ratio_vs_opencv": 4.726
+        },
+        "tile_4x32_vector_packed_source": {
+          "p50_us": 19956.7,
+          "p99_us": 20009.9,
+          "p50_ratio_vs_opencv": 4.673
+        }
+      },
+      "thermal_before_c": [
+        49.92,
+        50.85,
+        51.77
+      ],
+      "thermal_after_c": [
+        50.85,
+        51.77,
+        52.69,
+        53.62
+      ]
+    },
+    "448": {
+      "opencv_p50_us": 2515.9,
+      "input_shape": [
+        480,
+        640
+      ],
+      "variants": {
+        "unfused": {
+          "p50_us": 10883.4,
+          "p99_us": 10929.0,
+          "p50_ratio_vs_opencv": 4.326
+        },
+        "fused": {
+          "p50_us": 11248.0,
+          "p99_us": 11276.9,
+          "p50_ratio_vs_opencv": 4.471
+        },
+        "destination_only": {
+          "p50_us": 10434.3,
+          "p99_us": 10545.8,
+          "p50_ratio_vs_opencv": 4.147
+        },
+        "fused_destination": {
+          "p50_us": 9664.6,
+          "p99_us": 9687.9,
+          "p50_ratio_vs_opencv": 3.841
+        },
+        "tile_1x16": {
+          "p50_us": 11795.2,
+          "p99_us": 11814.3,
+          "p50_ratio_vs_opencv": 4.688
+        },
+        "tile_4x32": {
+          "p50_us": 15039.4,
+          "p99_us": 15139.9,
+          "p50_ratio_vs_opencv": 5.978
+        },
+        "tile_8x64": {
+          "p50_us": 14779.5,
+          "p99_us": 14936.6,
+          "p50_ratio_vs_opencv": 5.874
+        },
+        "tile_1x128": {
+          "p50_us": 11765.4,
+          "p99_us": 11813.9,
+          "p50_ratio_vs_opencv": 4.676
+        },
+        "tile_1x16_vector_packed_source": {
+          "p50_us": 10521.2,
+          "p99_us": 10660.1,
+          "p50_ratio_vs_opencv": 4.182
+        },
+        "tile_4x32_vector_packed_source": {
+          "p50_us": 9582.6,
+          "p99_us": 9658.4,
+          "p50_ratio_vs_opencv": 3.809
+        }
+      },
+      "thermal_before_c": [
+        50.85,
+        51.77,
+        52.69,
+        53.62
+      ],
+      "thermal_after_c": [
+        50.85,
+        51.77,
+        52.69
+      ]
+    }
+  },
+  "assembly_640": {
+    "fused_destination": {
+      "q_registers": 6,
+      "ldrb": 4,
+      "instructions": 164
+    },
+    "tile_1x16_vector_packed_source": {
+      "q_registers": 211,
+      "vector_ld1_st1": 240,
+      "ldrb": 0,
+      "instructions": 4391
+    }
+  },
+  "vectorization_limitation": "The vectorizer emits vector.gather with densely packed offsets, so those kernels are only valid for sources without row padding. edge-vectorize-preprocess rejects this by default and requires allow-packed-source-gather=true.",
+  "conclusions": [
+    "OpenCV INTER_LINEAR remains the default and the faster path at both production profiles.",
+    "Destination-passing plus fusion is the fastest MLIR configuration at 640x640 (4.49x slower than OpenCV).",
+    "Fixed tile sizes 4x32 and 8x64 were consistently slower than no tiling.",
+    "Real vector instructions were generated, yet still did not reach the baseline.",
+    "The 10% improvement gate from the plan was not met; no speedup is claimed."
+  ],
+  "limitations": [
+    "Single core (taskset -c 4), single thread, one input size 480x640.",
+    "Thermal snapshots are boundary readings, not continuous monitoring.",
+    "Timing excludes decode and output allocation; it is preprocessing only.",
+    "OpenCV differs from the Q11 reference within the frozen 1-level tolerance; MLIR kernels matched it exactly."
+  ]
+}

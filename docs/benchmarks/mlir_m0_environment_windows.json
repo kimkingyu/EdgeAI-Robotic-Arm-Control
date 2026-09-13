@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "purpose": "M0 read-only MLIR preprocessing environment inventory",
+  "created_utc": "2026-09-12T13:22:29.465243+00:00",
+  "project_root": "E:\\kimkingyu的开源\\EdgeAI-Robotic-Arm-Control",
+  "platform": {
+    "system": "Windows",
+    "release": "10.0",
+    "version": "10.0.26100",
+    "architecture": "unknown",
+    "status": "ok",
+    "architecture_source": "PROCESSOR_ARCHITEW6432/PROCESSOR_ARCHITECTURE",
+    "version_source": "sys.getwindowsversion (OS kernel version)"
+  },
+  "current_python": {
+    "executable": "C:\\Users\\admin\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+    "version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "version_info": [
+      3,
+      12,
+      10
+    ],
+    "implementation": "cpython"
+  },
+  "path_python_note": "tools.python is PATH's default Python; current_python is the running interpreter. packages describes only current_python.",
+  "tools": {
+    "python": {
+      "which": "D:\\AMESIM\\Amesim\\python.BAT",
+      "command": [
+        "D:\\AMESIM\\Amesim\\python.BAT",
+        "--version"
+      ],
+      "status": "failed",
+      "returncode": 3,
+      "stdout": "Starting Python ...\n",
+      "stderr": "The system cannot find the path specified.\n",
+      "timeout_seconds": 5
+    },
+    "ninja": {
+      "which": "C:\\mingw64\\bin\\ninja.EXE",
+      "command": [
+        "C:\\mingw64\\bin\\ninja.EXE",
+        "--version"
+      ],
+      "status": "ok",
+      "returncode": 0,
+      "stdout": "1.13.2\n",
+      "stderr": "",
+      "timeout_seconds": 5
+    },
+    "clang": {
+      "which": null,
+      "command": null,
+      "status": "missing",
+      "returncode": null,
+      "stdout": "",
+      "stderr": "",
+      "timeout_seconds": 5,
+      "reason": "Executable not found on PATH"
+    },
+    "mlir-opt": {
+      "which": null,
+      "command": null,
+      "status": "missing",
+      "returncode": null,
+      "stdout": "",
+      "stderr": "",
+      "timeout_seconds": 5,
+      "reason": "Executable not found on PATH"
+    },
+    "mlir-translate": {
+      "which": null,
+      "command": null,
+      "status": "missing",
+      "returncode": null,
+      "stdout": "",
+      "stderr": "",
+      "timeout_seconds": 5,
+      "reason": "Executable not found on PATH"
+    },
+    "llc": {
+      "which": null,
+      "command": null,
+      "status": "missing",
+      "returncode": null,
+      "stdout": "",
+      "stderr": "",
+      "timeout_seconds": 5,
+      "reason": "Executable not found on PATH"
+    },
+    "cmake": {
+      "which": "C:\\mingw64\\bin\\cmake.EXE",
+      "command": [
+        "C:\\mingw64\\bin\\cmake.EXE",
+        "--version"
+      ],
+      "status": "ok",
+      "returncode": 0,
+      "stdout": "cmake version 4.2.1\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).\n",
+      "stderr": "",
+      "timeout_seconds": 5
+    },
+    "gcc": {
+      "which": "C:\\mingw64\\bin\\gcc.EXE",
+      "command": [
+        "C:\\mingw64\\bin\\gcc.EXE",
+        "--version"
+      ],
+      "status": "ok",
+      "returncode": 0,
+      "stdout": "gcc.EXE (MinGW-W64 x86_64-msvcrt-posix-seh, built by Brecht Sanders, r5) 15.2.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "stderr": "",
+      "timeout_seconds": 5
+    },
+    "g++": {
+      "which": "C:\\mingw64\\bin\\g++.EXE",
+      "command": [
+        "C:\\mingw64\\bin\\g++.EXE",
+        "--version"
+      ],
+      "status": "ok",
+      "returncode": 0,
+      "stdout": "g++.EXE (MinGW-W64 x86_64-msvcrt-posix-seh, built by Brecht Sanders, r5) 15.2.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "stderr": "",
+      "timeout_seconds": 5
+    },
+    "git": {
+      "which": "C:\\Program Files\\Git\\mingw64\\bin\\git.EXE",
+      "command": [
+        "C:\\Program Files\\Git\\mingw64\\bin\\git.EXE",
+        "--version"
+      ],
+      "status": "ok",
+      "returncode": 0,
+      "stdout": "git version 2.53.0.windows.1\n",
+      "stderr": "",
+      "timeout_seconds": 5
+    }
+  },
+  "packages": {
+    "numpy": {
+      "status": "missing",
+      "version": "unknown",
+      "distributions": {},
+      "errors": {},
+      "checked_distributions": [
+        "numpy"
+      ],
+      "source": "importlib.metadata (current Python)",
+      "note": "Metadata only; does not establish module importability or active provider. OS-managed packages without distribution metadata may be unreported."
+    },
+    "cv2": {
+      "status": "missing",
+      "version": "unknown",
+      "distributions": {},
+      "errors": {},
+      "checked_distributions": [
+        "opencv-python",
+        "opencv-python-headless",
+        "opencv-contrib-python",
+        "opencv-contrib-python-headless",
+        "opencv",
+        "cv2"
+      ],
+      "source": "importlib.metadata (current Python)",
+      "note": "Metadata only; does not establish module importability or active provider. OS-managed packages without distribution metadata may be unreported."
+    },
+    "rknnlite": {
+      "status": "missing",
+      "version": "unknown",
+      "distributions": {},
+      "errors": {},
+      "checked_distributions": [
+        "rknn-toolkit-lite2",
+        "rknn-toolkit-lite",
+        "rknnlite"
+      ],
+      "source": "importlib.metadata (current Python)",
+      "note": "Metadata only; does not establish module importability or active provider. OS-managed packages without distribution metadata may be unreported."
+    }
+  },
+  "disk_usage": {
+    "path": "E:\\kimkingyu的开源\\EdgeAI-Robotic-Arm-Control",
+    "status": "ok",
+    "unit": "bytes",
+    "total": 730901581824,
+    "used": 565303504896,
+    "free": 165598076928
+  },
+  "cpu": {
+    "logical_count": {
+      "status": "ok",
+      "value": 20
+    },
+    "affinity": {
+      "status": "unknown",
+      "cpus": "unknown",
+      "count": "unknown",
+      "reason": "os.sched_getaffinity unavailable on this platform"
+    },
+    "model": {
+      "status": "unknown",
+      "values": "unknown",
+      "source": "/proc/cpuinfo",
+      "reason": "No model text available; ARM identifiers may be in linux.cpuinfo.values"
+    },
+    "architecture": {
+      "status": "unknown",
+      "value": "unknown"
+    }
+  },
+  "linux": {
+    "status": "not_applicable",
+    "meminfo": {
+      "path": "\\proc\\meminfo",
+      "status": "unknown",
+      "values": {},
+      "reason": "Not a Linux host"
+    },
+    "os_release": {
+      "path": "\\etc\\os-release",
+      "status": "unknown",
+      "values": {},
+      "reason": "Not a Linux host"
+    },
+    "cpuinfo": {
+      "path": "\\proc\\cpuinfo",
+      "status": "unknown",
+      "values": {},
+      "reason": "Not a Linux host"
+    }
+  },
+  "script_path": "E:\\kimkingyu的开源\\EdgeAI-Robotic-Arm-Control\\tools\\collect_mlir_environment.py",
+  "script_sha256": "4a0d43f50e1998e0a20ec1c2cb0e3bd1b2a037125329cf705a0a8d7584cb190a",
+  "limitations": [
+    "Version strings and package metadata do not verify compiler or RKNN usability.",
+    "No hardware initialization, imports of inspected packages, build, installation, benchmark, environment dump, credentials, or SSH configuration collection.",
+    "CPU model is unknown without Linux model fields; affinity is unknown when unsupported.",
+    "PATH executables are trusted to honor --version; each call has a 5-second timeout."
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "stage": "M2-M3",
+  "status": "passed",
+  "scope": "numerical equality, pass legality and memory behavior; no speed or model-accuracy claim",
+  "profiles": [
+    [
+      1,
+      1
+    ],
+    [
+      1,
+      9
+    ],
+    [
+      5,
+      7
+    ],
+    [
+      9,
+      1
+    ],
+    [
+      448,
+      448
+    ],
+    [
+      640,
+      640
+    ]
+  ],
+  "variant_count": 24,
+  "inputs_per_variant": 36,
+  "repeats_per_input": 3,
+  "ir_alloc_copy_per_variant": {
+    "unfused": [
+      [
+        2,
+        1
+      ]
+    ],
+    "fused": [
+      [
+        1,
+        1
+      ]
+    ],
+    "destination_only": [
+      [
+        1,
+        0
+      ]
+    ],
+    "fused_destination": [
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "measured_alloc_free_outstanding_per_run": {
+    "unfused": [
+      [
+        2,
+        2,
+        0
+      ]
+    ],
+    "fused": [
+      [
+        1,
+        1,
+        0
+      ]
+    ],
+    "destination_only": [
+      [
+        1,
+        1,
+        0
+      ]
+    ],
+    "fused_destination": [
+      [
+        0,
+        0,
+        0
+      ]
+    ]
+  },
+  "reference": "independent Fraction Q11 oracle; MLIR output byte-identical",
+  "opencv_differential": {
+    "limit": 1,
+    "observed_max_abs_error": 1,
+    "comparisons": 216,
+    "note": "compatibility bound, not bit-exact OpenCV equality"
+  },
+  "pass_legality": {
+    "positive": 3,
+    "rejected_unchanged": 40
+  },
+  "runtime_needed": [
+    "libstdc++.so.6",
+    "libc.so.6",
+    "ld-linux-aarch64.so.1"
+  ],
+  "real_images": 16,
+  "evidence": {
+    "correctness": "build/mlir-results/m23_correctness.json (not tracked)",
+    "manifest": "build/mlir-results/m23_manifest.json (not tracked)",
+    "pass_legality": "docs/benchmarks/mlir_m3_pass_legality.json"
+  },
+  "limitations": [
+    "Allocation counts come from linker-wrapped malloc/aligned_alloc/free during each run, not process RSS.",
+    "Guard-page and read-only input checks bound access; they are not a full sanitizer run.",
+    "Kernels are scalar; no tiling, vectorization or timing was measured.",
+    "Byte equality with the Q11 reference does not establish detection accuracy."
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "stage": "M1",
+  "status": "passed",
+  "scope": "real AArch64 color-only AOT; not resize, fusion, SIMD or speedup evidence",
+  "toolchain_report": "docs/benchmarks/mlir_m1_toolchain.json",
+  "smoke_report": "docs/benchmarks/mlir_m1_color_smoke.json",
+  "source_archive_sha256": "6898f963c8e938981e6c4a302e83ec5beb4630147c7311183cf61069af16333d",
+  "build_elapsed_seconds": 14641.613773067002,
+  "maximum_single_child_process_rss_kib": 4506288,
+  "memory_metric_note": "Linux RUSAGE_CHILDREN.ru_maxrss: maximum single child process RSS, in KiB, across this bootstrap process's waited-for children; not a per-command peak and not concurrent total memory peak.",
+  "cpp_test_log": "C++ MLIR color smoke: exact pixels, input unchanged, padding/guards intact, short buffer rejected\n",
+  "python_test_log": "test_errors_never_write_output (__main__.ColorSmokeTests) ... ok\ntest_exact_pixels_strides_guards_and_repeat (__main__.ColorSmokeTests) ... ok\n\n----------------------------------------------------------------------\nRan 2 tests in 0.003s\n\nOK\n",
+  "runtime_needed": [
+    "libstdc++.so.6",
+    "libc.so.6",
+    "ld-linux-aarch64.so.1"
+  ],
+  "artifacts": {
+    "01-color.mlir": {
+      "sha256": "944111ff6b3e5396989b3e7c3696a97ac33fa1e99fef4cbdd916f721c29f647e",
+      "bytes": 1264
+    },
+    "02-llvm.mlir": {
+      "sha256": "c4fa445777ee212a1f89b37ce0190ba19205a0469832e7465aacba4b0207fc64",
+      "bytes": 8712
+    },
+    "03-color.ll": {
+      "sha256": "1af0bf51848928d38aa7ddda06e3dfa3ecc9e58e9c6e95239de065c7a33a35b7",
+      "bytes": 6127
+    },
+    "04-color.o": {
+      "sha256": "83a89abd72dee147d3667b7dcc02707ebe6339254ff4a90ce437e8c8a03f8cfe",
+      "bytes": 1192
+    },
+    "04-color.s": {
+      "sha256": "4320ab631c178c39cd14353d17282189fb7ebcd35f9628fcf813bfcc05f86fc3",
+      "bytes": 2364
+    },
+    "libedge_color_smoke.so": {
+      "sha256": "343b8b7e8fea34cf85086d76cce77fa9128b630f205928728f1e1099a41354d8",
+      "bytes": 8600
+    },
+    "color_smoke": {
+      "sha256": "5db59c7f0921137bfe89fb270e8e0539a1ee473a504efd472187c78fe008acc2",
+      "bytes": 14608
+    }
+  },
+  "notes": [
+    "Color pixel loop uses scalar ldrb/strb. q-register moves in the C-interface wrapper copy descriptors, not SIMD pixels.",
+    "Ten shape/padding combinations, 25 repeats each, plus 16 invalid-argument cases; no timing claim.",
+    "Server restart detached SSH but did not stop the original bootstrap; pidfd monitoring recovered its persisted completion.",
+    "Existing production preprocessing and RKNN environment unchanged."
+  ]
+}

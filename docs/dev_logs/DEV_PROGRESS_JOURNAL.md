@@ -630,3 +630,193 @@ git push 成功输出 32309ec..eb9ae64 main -> main，git status 显示 working 
 > 💡 **亮点提炼**：工程协同规范：通过严格的代码审查、端到端复验与原子化提交，将底层重构与高可靠控制链路完整同步至开源仓库。
 
 ---
+
+## 📍 第 34 步：MLIR M0：核验真实 RKNN 输入契约并验证 OpenCV 基线工具
+* **记录时间**：`2026-09-12 21:05:27` ｜ **技术模块**：`[MLIR/Vision/NPU]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+新增 tools/inspect_rknn_contract.cpp 与 tools/probe_preprocess_contract.py；固定官方 rknn_api.h 到 commit 59a913d172e7f5ff03c9076e2ec7b1b1288ffd08，板端独立目录 g++ -std=c++17 -O2 -Wall -Wextra -Werror -lrknnrt 编译元数据探测器。使用既有 .venv-rknn 和真实图片对 YOLO640/Qwen448 各执行一次真实 NPU 输入接受性推理，保存 docs/benchmarks/mlir_m0_contract.json。新增 tools/benchmark_preprocess.py 与 tools/test_benchmark_preprocess.py；板端 .venv-rknn/bin/python -B tools/test_benchmark_preprocess.py。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+区分应用输入与模型内部张量类型，避免重复归一化或错误转置；原流水线计时不覆盖预处理，需独立采集 resize、换色、batch视图与总耗时。所有工作与舵机隔离，不改现有推理链路或虚拟环境。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+YOLO应用 uint8 NHWC RGB [1,640,640,3] 被真实运行时接受，内部为INT8 NHWC，输出[1,84,8400]；Qwen应用 uint8 NHWC RGB [1,448,448,3] 被接受，内部为FP16 NHWC，返回4个[196,2560]张量。runtime=2.3.2，driver=0.9.6，lite=2.3.0。板端14项unittest全部通过、无skip（Windows此前9通过5skip，不冒称完整通过）。输入接受不证明模型精度或Qwen内部归一化语义。LLVM源码单流下载10分钟超时，仅约17MB/147242952B；未当成可用归档，已验证官方API支持HTTP206断点范围请求。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：建立CPU预处理与NPU量化输入的可审计边界，以模型哈希、真实运行时查询和可测试微基准避免伪闭环与虚假加速结论。
+
+---
+
+## 📍 第 35 步：MLIR M0完成：四种尺寸八万次基线与双端环境清单
+* **记录时间**：`2026-09-12 21:25:50` ｜ **技术模块**：`[MLIR/Vision/Benchmark]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+新增 tools/collect_mlir_environment.py、tools/test_collect_mlir_environment.py、tools/summarize_preprocess_benchmark.py，输出 docs/benchmarks/mlir_m0_environment_board.json、mlir_m0_environment_windows.json、mlir_m0_opencv_summary.json。板端在独立工作目录对16张真实图片预先生成640x480、1280x720、1920x1080、641x479派生输入，taskset -c 4；--sizes 640 448 --mode both --warmup 30 --iterations 1000 --batches 5 --threads 1。生成 compiler/profiles/yolo640.json 与 qwen448.json；compiler/toolchain.lock.json固定LLVM标签、commit、官方资产大小和SHA256。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+建立可复现的单核OpenCV对照，逐次验证完整输出而不是拿随机图或既有推理计时冒充基线；保留batch视图、分配边界、缓存模式、输入来源与环境限制；冻结外部RGB uint8 NHWC契约而不声称已实现MLIR。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+16个case，每case5000正式样本，共80000；每批另30次预热，所有输出校验通过。640x480->640的hot/stream P50=4.3531/4.4167ms；640x480->448 P50=1.9854/2.0486ms；1920x1080->640 P50=5.8788/5.8531ms。计时不含解码、派生输入缩放、SHA校验、析构；FPS仅由计时推导，非持续吞吐。CPU4=implementer0x41/part0xd0b，policy4边界快照均2400000kHz，温度快照38.846~51.769C，不是持续监控。原始四份JSON合计20957695B保存在板端reports及本地build/mlir-results（不入Git）；摘要保留批次、SHA与大小。板端环境工具38项测试全过，连同基线14项共52项无skip。板端GCC11.4.0/CMake3.22.1/Python3.10.12/NumPy1.26.4/cv2 4.11.0。Windows另查得py -3.12可用与PATH Ninja1.13.2；不能沿用此前PATH未检出的结论，也未安装新工具。Qwen内部归一化仍未独立核实，profile明确标实验与精度未验证。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：以8万次逐帧校验微基准、真实NPU模型契约和双端版本快照建立编译优化的可信对照；准确区分数据类型转换、图像语义、测量开销和模型精度边界。
+
+---
+
+## 📍 第 36 步：MLIR M1准备：固定构建守卫与最小换色AOT测试链
+* **记录时间**：`2026-09-12 21:57:52` ｜ **技术模块**：`[MLIR/Build/ABI]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+新增 compiler/CMakeLists.txt、compiler/tools/edge-opt.cpp、compiler/tests/color_smoke.mlir、color_smoke_abi.cpp、color_smoke_checks.py；新增 scripts/mlir/bootstrap_llvm.py、fetch_llvm_source.py、run_color_smoke.py及compiler/tests三份单测。bootstrap只允许原生aarch64独立用户目录，先校验官方归档SHA256，再安全解压；固定GCC11.4/CMake3.22.1/Make4.3，编译并发2，用CMake linker launcher与flock串行链接。最小换色核由MLIR负责像素操作，C ABI只校验指针、尺寸、stride、容量和重叠，并构造rank-3 memref descriptor。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+先验证MLIR到LLVM IR、AArch64对象及C/Python ABI的最短真实路径，再投入resize和融合；没有Ninja也不能误称Make支持Ninja链接job pool。构建与既有RKNN环境隔离，配置完成不等于工具链完成，mock守卫测试不等于生成代码运行通过。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+Windows构建/下载守卫57项mock测试通过；新增烟测编排5项后，板端系统Python3.10运行compiler/tests共62项mock/控制流单测全通过。Windows MinGW GCC15.2与板端GCC11.4均通过ABI文件（普通与MAIN分支）-std=c++17 -Wall -Wextra -Werror -fsyntax-only。尚未编译edge-opt、尚未生成/执行真实MLIR对象，M1未验收。官方源码单流下载超时后残留gh进程仍在写入，已按核实过的PID终止本会话残留进程；完整归档尚未通过哈希。HTTP206小范围请求已实测可达（默认3.17s、HTTP1.1为8.59s），大范围反复遇到连接中断或超时；保留已完成范围，缩小到256KiB请求继续补齐，不用第三方镜像，不放宽SHA256验证。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：构建出带归档完整性门禁、目录所有权标记、可复核命令日志和ABI越界拒绝的编译器实验底座；明确隔离编译期依赖与运行期库，避免把脚手架、配置或mock测试包装成编译优化成果。
+
+---
+
+## 📍 第 37 步：MLIR M1：官方源码完整校验、tar兼容修复与板端构建启动
+* **记录时间**：`2026-09-12 22:48:24` ｜ **技术模块**：`[MLIR/Build/Toolchain]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+最终以 GODEBUG=http2client=0、256KiB范围、单连接补齐官方LLVM归档；只对瞬态传输故障重连一次，鉴权失败和数据范围错误不重试。归档传至板端后由bootstrap再次校验。新增checked_data_filter修复部署Python3.10对相对符号链接解析基准的差异，保持归档图验证、实时目录边界检查、所有权与权限过滤；不改系统Python。将本次无source marker的失败解压树保存为.partial-before-symlink-fix后重新解压。真实配置通过，保存 docs/benchmarks/mlir_m1_toolchain_configured.json；启动bootstrap完整构建mlir-opt、mlir-translate、llc、FileCheck、mlir-tblgen。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+排除网络传输与本机解压兼容问题，而不是放宽源码哈希、关闭路径防护或升级RKNN环境；用真实CMake配置和链接规则验证独立工具链可构建，再等待实际编译和AOT执行证据。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+归档147242952B，SHA256=6898f963c8e938981e6c4a302e83ec5beb4630147c7311183cf61069af16333d，与GitHub官方release digest一致。HTTP2问题现场30秒仅收到2771B body；同段HTTP1.1收到完整262144B。临时仅限官方域名的loopback转发已关闭，最终使用直连HTTP1.1。官方归档19个链接；部署/usr/lib/python3.10/tarfile.py把symlink和hardlink都按解压根目录解析，导致合法CUDA fixture相对链接误报LinkOutsideDestinationError；新过滤保留原链接及越界拒绝。Windows bootstrap54项通过，板端compiler/tests共67项通过。板端GCC包装层目标nm确认未解析的_mlir_ciface_edge_color_smoke_impl符号，但还未与MLIR对象链接。真实配置耗时140.7秒；Release、assertions ON、mlir;clang、AArch64；mlir-opt实际link.txt以/usr/bin/flock开头。源码/配置树含失败现场共2802536KiB。工具链正式编译已启动；配置状态toolchain_complete=False，M1仍未验收，无MLIR加速结论。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：在不改变部署环境的前提下完成固定版本编译底座的获取、完整性验证、发行包兼容排障和受控构建；可解释ABI符号、Make链接并发以及源码安全解包的工程取舍。
+
+---
+
+## 📍 第 38 步：MLIR M1：恢复既有构建监控并跑通真实IR降级预检
+* **记录时间**：`2026-09-13 02:43:01` ｜ **技术模块**：`[MLIR/Build/ABI]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+NarraFork服务重启后先查询板端toolchain.json、构建日志及/proc，确认bootstrap PID9771仍在运行，未重启构建。通过os.pidfd_open与select.poll重新等待同一进程，不做轮询sleep或并发重编译。待mlir-opt/mlir-translate生成后，使用上游20.1.8工具执行color_smoke.mlir的SCF->CF->LLVM、MemRef/Arith/Func转换及reconcile，再翻译为LLVM IR；保存预检文件到build/mlir-results。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+区分控制服务的连接丢失与板端编译失败，避免重复编译和证据混淆；趁llc仍在编译验证IR语法、pass顺序与C接口符号，但不把预检当作机器码或AOT验收。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+服务重启时原bootstrap仍活跃且PPid=1，两个cc1plus继续工作，日志62%；后续推进到81%、96%均无error/undefined reference/CMake Error。累计232.9分钟时mlir-opt、mlir-translate、mlir-tblgen已生成，llc/FileCheck尚未完成，内存可用15118020kB且SwapFree未下降。两项已生成工具真实--version均为LLVM20.1.8（assertions）；真实降级与翻译退出0，LLVM IR为6127B，包含define void @edge_color_smoke_impl（18个扁平参数）及define void @_mlir_ciface_edge_color_smoke_impl(ptr,ptr)。这些仅为上游工具预检；edge-opt、目标对象和C/Python真实执行尚未验收。只读静态调用链复核未发现明确S1/S2/S3阻塞问题；首次辅助review代理因API工具schema错误未执行，改用只读general代理完成，不冒称动态验证。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：掌握MLIR分层降级与ranked memref C接口，能根据进程和持久化日志恢复长时构建的真实状态，而非在连接异常后盲目重复执行。
+
+---
+
+## 📍 第 39 步：MLIR M1验收：真实AArch64换色算子与C/Python ABI贯通
+* **记录时间**：`2026-09-13 03:05:41` ｜ **技术模块**：`[MLIR/AOT/ABI]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+固定五工具全部构建后，通过独立 compiler/CMakeLists.txt 配置并构建 edge-opt：指定LLVM_DIR与MLIR_DIR为用户工具链build/lib/cmake，Release/GCC11.4/并发2/共享flock链接。执行 scripts/mlir/run_color_smoke.py，依次产生MLIR、LLVM IR、AArch64 PIC对象与汇编，链接测试库和C++程序，再运行C++及Python ctypes检查。保存 docs/benchmarks/mlir_m1_toolchain.json、mlir_m1_color_smoke.json、mlir_m1_summary.json 与 mlir_m1_ir/ 小样例，新增 docs/MLIR_PREPROCESS_BUILD.md 复现步骤。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+把能配置、能编译、能降级、能调用四层证据分开，最终用真实机器码而非mock验证C ABI与正行stride缓冲；运行期只带轻量算子库，不把整个LLVM/MLIR引入机械臂默认运行环境。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+五个上游工具及edge-opt均真实报告LLVM20.1.8。完整工具链构建14641.61秒；最大单个子进程RSS4506288KiB（不是并发总峰值）；目录4887688KiB（含保留的失败解压现场）。M1共13条真实命令全部退出0；C++验证exact pixels/input unchanged/padding guards/short buffer rejection；Python两项真实测试通过，覆盖10组形状与padding各25次、16组非法参数。七份产物本地重新核对SHA256全部一致；对象1192B，运行库8600B。readelf NEEDED仅libstdc++.so.6、libc.so.6、ld-linux-aarch64.so.1，无LLVM/MLIR运行时依赖。ARM像素循环为ldrb/strb标量代码，包装中的q寄存器仅搬运descriptor。M1已完成；尚无resize、自写融合、像素SIMD或性能加速结论。原预处理、RKNN环境和舵机路径未改，未提交或推送。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：完成固定MLIR标准dialect到AArch64 AOT算子的实际工程闭环，掌握ranked memref描述符、C ABI边界、目标链接与运行依赖检查，为后续resize/fusion/destination-passing优化提供可复现底座。
+
+---
+
+## 📍 第 40 步：MLIR M2-M3初验：Q11参考、真实融合与目标缓冲复用
+* **记录时间**：`2026-09-13 16:03:14` ｜ **技术模块**：`[MLIR/Compiler/Memory]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+新增Fraction独立参考和59项测试；新增edge-preprocess-gen用MLIR Builder生成tensor.generate Q11缩放及linalg.generic通道置换。新增PreprocessPasses.cpp逐结构验证坐标、Q11权重、四邻域、最后一次舍入、纯置换及单使用者后，通过PatternRewriter融合；目标Pass转移restrict至to_tensor并改为destination-style generic。edge-opt注册Tensor/Linalg/Arith/SCF/Func缓冲化外部模型。新增runtime C ABI及链接器malloc/aligned_alloc/free审计，新增四组build_preprocess.py与真实preprocess_aot_checks.py。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+用独立Fraction oracle区分目标实现与参考；用四组消融分离融合和目标复用作用；在IR和真实分配器两个层面证明内存变化，不把仅出现tensor融合当作零分配。限制同context顺序调用，独立context并行；保护页和输入只读映射用于检测实际机器码越界，不拿未插桩的MLIR对象冒充ASan验证。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+板端NumPy1.26.4/OpenCV4.11.0下参考59项全部通过无skip，包含36组OpenCV差分max_abs_error<=1。首次C++编译发现20.1.8 GenericOp无getNumInputs/getNumOutputs，改用getInputs().size()/getOutputs().size()后两工具编译成功。5x7实际缓冲IR：unfused alloc2/copy1，fused1/1，destination_only1/0，fused_destination0/0。四个真实ARM内核均通过36个输入（合成边界+16真实图片+5派生尺寸+同尺寸）每例3次与Fraction参考逐字节一致，输入不变、前后哨兵、22组非法参数、重复目标缓冲和独立context并发、子进程PROT_NONE保护页/只读input均通过。实测每run alloc/free为2/2、1/1、1/1、0/0且无outstanding。尚待640/448及其他小尺寸与Pass正反例完整验证；M2-M3仍doing，无性能或模型精度结论。辅助代理服务失败后主代理读取并接手所有落盘文件，不把部分输出当完成。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：实现从张量IR结构合法性判断到destination-passing缓冲化的自写编译变换，并以真实ARM输出、allocator审计与页级访问防护交叉验证正确性和内存收益。
+
+---
+
+## 📍 第 41 步：MLIR M2-M3验收：24个真实内核逐字节正确且实现零分配目标复用
+* **记录时间**：`2026-09-13 17:36:21` ｜ **技术模块**：`[MLIR/Compiler/Memory]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+用build_preprocess.py对6个输出尺寸（640x640、448x448、5x7、1x1、1x9、9x1）从同一份生成IR分别构建unfused/fused/destination_only/fused_destination四种配置共24个AArch64内核，链接带--wrap分配审计的C ABI运行库。preprocess_aot_checks.py执行逐字节比对、分配审计、哨兵与子进程PROT_NONE保护页；preprocess_pass_checks.py用真实FileCheck验证正反例。修复反例本身的SSA命名、定义顺序错误，并按各Pass合法性把多使用者用例分组：额外读取resize结果只禁止融合，不禁止目标改写。新增docs/benchmarks/mlir_m23_summary.json与中间IR样例，更新docs/MLIR_PREPROCESS_BUILD.md。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+把融合与目标缓冲复用的收益分开验证，并用IR计数和真实分配器两个独立口径交叉确认；反例失败时修正测试预期而不是放宽Pass的合法性判断，避免为通过测试而错误扩大变换适用范围。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+24个内核全部通过，每个36组输入（合成边界、16张真实图片、5个派生尺寸、同尺寸）各重复3次，输出与独立Fraction Q11参考逐字节一致；输入、输入padding与输出哨兵均未被修改。每run实测alloc/free：unfused 2/2、fused 1/1、destination_only 1/1、fused_destination 0/0，outstanding均为0；缓冲化IR的alloc/copy为2/1、1/1、1/0、0/0。216组OpenCV INTER_LINEAR差分max_abs_error=1（兼容性上界，非逐位一致）。Pass合法性：3组正例改写符合FileCheck，40组非法/不支持写法被拒绝且IR逐字节不变。运行库NEEDED仅libstdc++/libc/ld-linux-aarch64。参考自身59项测试在板端全通过无skip。内核仍为标量，未做分块/向量化，未测任何时间，不构成加速结论；模型精度未验证。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：完整交付自写MLIR融合与destination-passing变换：以结构化IR匹配保证语义安全、以真实机器码和分配器审计证明消除整图临时缓冲，并用独立数值oracle与拒绝性测试防止虚假通过。
+
+---
+
+## 📍 第 42 步：MLIR M4：分块与向量化消融，未取得加速并定位gather语义限制
+* **记录时间**：`2026-09-13 18:20:29` ｜ **技术模块**：`[MLIR/Compiler/Performance]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+新增 compiler/lib/Transforms/ScheduleExperiments.cpp 提供 edge-tile-preprocess 与 edge-vectorize-preprocess 两个可选Pass；在 edge-opt 补齐 TilingInterface、ValueBounds、Vector 缓冲化与 SubsetInsertion 等外部模型注册，并注册 vector 方言。build_preprocess.py 扩展为十种配置（四种消融加四种分块加两种向量化），LOWER 增加 convert-vector-to-scf、convert-vector-to-llvm 与 expand-strided-metadata，并新增未降级算子检查。新增 compiler/tests/preprocess_ablation.py 做交错计时。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+把分块、向量化与既有融合/目标复用分开测量，确认收益来源；对不适用配置按尺寸如实标记而不是伪装通过；对错误结果追查根因而不是放宽正确性判据或改用无填充输入掩盖。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+52个内核构建并全部通过36组输入×3次逐字节校验、分配审计与保护页检查；8个因输出尺寸不大于分块尺寸标为不适用。640x640单核P50：OpenCV 4270.5us；unfused 23208.9(5.44x)、fused 22414.8(5.25x)、destination_only 21083.4(4.94x)、fused_destination 19168.7(4.49x)、tile_1x16 23824.3(5.58x)、tile_4x32 29443.8(6.89x)、tile_8x64 28588.0(6.69x)、tile_1x128 23659.3(5.54x)、tile_1x16_vector 20182.3(4.73x)、tile_4x32_vector 19956.7(4.67x)。448x448最好为3.81x慢。计划的至少10%改善门槛未达成，默认仍用OpenCV。汇编确认向量化真实生成SIMD（211个q寄存器引用、240条ld1/st1，对比融合版6个），但仍慢于基线。关键缺陷：上游对tensor.extract生成的vector.gather按紧凑布局算偏移，实测带5字节行填充输入最大误差249；已让Pass默认拒绝，需显式allow-packed-source-gather=true，并在清单标记requires_packed_source。基准中MLIR与参考不一致0次，OpenCV差异在冻结1灰度级容差内；温度边界49.9-53.6C。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：完成分块/向量化调度消融并给出可信的负面结论，能定位向量gather的布局假设缺陷、区分IR层面向量化成功与目标机器实际收益，避免把编译器变换生效误报为性能优化成功。
+
+---
+
+## 📍 第 43 步：MLIR M5-M6：可选预处理后端接入与真实RKNN A/B，定位±1灰度级差异改变模型输出
+* **记录时间**：`2026-09-13 18:58:04` ｜ **技术模块**：`[MLIR/Integration/Benchmark]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+新增 src/vision/preprocess.py 统一 Preprocessor，OpenCV 默认、MLIR 显式可选，ctypes 调用薄 C ABI 并声明 argtypes/restype；buffer_span 沿 base 链核对真实可访问范围而非用 nbytes；check_source 拒绝 float/灰度/RGBA/空图/负stride/稀疏列/虚报形状。改 src/pipeline/vlm_grasp_pipeline.py 的 640 与 448 两处预处理、src/vision/rknn_detector.py 改走同一实现，tools/run_vlm_grasp.py 增加 --preprocess-backend 与 HxW=PATH 形式的 --preprocess-library。新增 tools/test_mlir_preprocess.py（22 用例）与 tools/benchmark_preprocess_rknn.py（真实 RKNN A/B，含 NPU 确定性对照与 Q11 参考归因）。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+计划要求 OpenCV 保持默认、MLIR 为显式后端，且缺库必须报错而不是静默退回后仍报 MLIR 耗时。发现 AOT 内核输出尺寸编译期固定，单一 library 配置无法同时服务 640 和 448，改为按 profile 查找 libraries，缺失即报错而不是拿错尺寸的库硬凑。模型输出出现差异时不直接归因，先加确定性对照和独立参考比较来定位来源。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+M5：22 项测试在 640x640 与 448x448 两个 profile 全通过（含 ROI、连续调用不串帧、4 线程独立输出、尺寸切换重建 context 并单列创建耗时、manifest 与 profile 核对）；--require-mlir 缺库退出码 1 属 failure 非 skip；无 MLIR 库时两个 profile 均回落 OpenCV、detector 正常、导入期不加载任何 .so；入口选项实测落到配置，--preprocess-backend mlir 缺库 SystemExit(2)。M6 真实 librknnrt 2.3.2 + 真实权重：yolov8n_int8@640 预处理 OpenCV 9544.7us vs MLIR 29050.9us（3.04x 慢），qwen3vl4b_vision@448 为 2096.5us vs 9708.9us（4.63x 慢）。关键发现：两后端预处理仅差 1 个灰度级（YOLO 6.01%、Qwen 12.53% 的值不同），但模型原始输出不一致——YOLO 8 个张量最大绝对差 180.220、平均 0.097776、2.03% 元素不同；Qwen 32 个张量最大 5.070、99.28% 元素不同。归因证据：同一输入连续两次推理逐字节一致证明 NPU 确定；对独立 Q11 参考 MLIR 逐字节一致而 OpenCV 不一致（最大差 1），说明偏离参考的是 OpenCV 舍入而非 MLIR 算错。复验：全新目录重建 312 个 IR/汇编产物 SHA256 全部一致、0 个不同，52 个内核重新通过正确性，A/B 复跑 3.06x 结论未变。因慢且输出不等价，OpenCV 保持默认。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：完成编译器产物到真实 NPU 推理链路的可选接入与 A/B 验证，能设计确定性对照实验区分 NPU 非确定性与输入差异、用独立定点参考定位数值偏差归属方，并识别出 ±1 灰度级预处理差异经模型放大后不可忽略，从而拒绝看似等价的默认替换。
+
+---

@@ -1,0 +1,63 @@
+{
+  "owner": "edgeai-bootstrap-llvm-v1",
+  "root": "/home/orangepi/toolchains/edgeai-llvm-20.1.8",
+  "llvm": {
+    "owner": "edgeai-bootstrap-llvm-v1",
+    "tag": "llvmorg-20.1.8",
+    "commit": "87f0227cb60147a26a1eeb4fb06e3b505e9c7261",
+    "source_directory": "llvm-project-20.1.8.src",
+    "source_bytes": 147242952,
+    "source_sha256": "6898f963c8e938981e6c4a302e83ec5beb4630147c7311183cf61069af16333d"
+  },
+  "expected_version": "20.1.8",
+  "configure_only": false,
+  "status": "complete",
+  "toolchain_complete": true,
+  "started_utc": "2026-09-12T14:47:41.408087+00:00",
+  "evidence_directory": "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc",
+  "commands": [
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/01-prerequisite-cc.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/02-prerequisite-cxx.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/03-prerequisite-cmake.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/04-prerequisite-make.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/05-prerequisite-python.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/06-configure.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/07-build.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/08-version-mlir-opt.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/09-version-mlir-translate.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/10-version-llc.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/11-version-FileCheck.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/12-version-mlir-tblgen.json",
+    "/home/orangepi/toolchains/edgeai-llvm-20.1.8/logs/20260912T144741.407778Z-37d3d4cc/13-disk-usage.json"
+  ],
+  "rss_note": "Linux RUSAGE_CHILDREN.ru_maxrss: maximum single child process RSS, in KiB, across this bootstrap process's waited-for children; not a per-command peak and not concurrent total memory peak.",
+  "source": "/home/orangepi/toolchains/edgeai-llvm-20.1.8/llvm-project-20.1.8.src",
+  "tools": {
+    "mlir-opt": {
+      "path": "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/mlir-opt",
+      "version": "20.1.8"
+    },
+    "mlir-translate": {
+      "path": "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/mlir-translate",
+      "version": "20.1.8"
+    },
+    "llc": {
+      "path": "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/llc",
+      "version": "20.1.8"
+    },
+    "FileCheck": {
+      "path": "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/FileCheck",
+      "version": "20.1.8"
+    },
+    "mlir-tblgen": {
+      "path": "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/bin/mlir-tblgen",
+      "version": "20.1.8"
+    }
+  },
+  "LLVM_DIR": "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/lib/cmake/llvm",
+  "MLIR_DIR": "/home/orangepi/toolchains/edgeai-llvm-20.1.8/build/lib/cmake/mlir",
+  "disk_usage_kib": 4887688,
+  "ended_utc": "2026-09-12T18:51:43.021740+00:00",
+  "elapsed_seconds": 14641.613773067002,
+  "maximum_single_child_process_rss_kib": 4506288
+}

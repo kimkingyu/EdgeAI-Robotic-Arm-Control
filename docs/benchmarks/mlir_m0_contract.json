@@ -1,0 +1,280 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "mock": false,
+  "purpose": "application_input_acceptance_not_model_accuracy",
+  "created_utc": "2026-09-12T12:52:11.511664+00:00",
+  "source_sha256": "9a1f0992cd3450984dc28ce24149974a5acb62374423e87436b4377c33675ed5",
+  "python": "3.10.12 (main, Jul 15 2026, 23:40:17) [GCC 11.4.0]",
+  "python_executable": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control/.venv-rknn/bin/python",
+  "machine": "aarch64",
+  "profiles": [
+    {
+      "name": "yolo640",
+      "model_path": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control/models/weights/yolov8n_int8.rknn",
+      "model_sha256": "9b8bf4a871c55572b953be16f33403376f20ee72af93f879d1f185ea580c174a",
+      "metadata_process": {
+        "returncode": 0,
+        "stdout": "RKNN metadata: inputs=1 outputs=1\n",
+        "stderr": ""
+      },
+      "metadata": {
+        "schema_version": 1,
+        "model_path": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control/models/weights/yolov8n_int8.rknn",
+        "runtime": "2.3.2 (429f97ae6b@2025-04-09T09:09:27)",
+        "driver": "0.9.6",
+        "metadata_only": true,
+        "inputs": [
+          {
+            "index": 0,
+            "name": "images",
+            "dims": [
+              1,
+              640,
+              640,
+              3
+            ],
+            "format": "NHWC",
+            "type": "INT8",
+            "quantization": 2,
+            "zero_point": -128,
+            "scale": 0.00392156886,
+            "elements": 1228800,
+            "bytes": 1228800,
+            "width_stride": 640,
+            "bytes_with_stride": 1228800
+          }
+        ],
+        "outputs": [
+          {
+            "index": 0,
+            "name": "output0",
+            "dims": [
+              1,
+              84,
+              8400
+            ],
+            "format": "UNDEFINED",
+            "type": "INT8",
+            "quantization": 2,
+            "zero_point": -128,
+            "scale": 2.57457137,
+            "elements": 705600,
+            "bytes": 705600,
+            "width_stride": 0,
+            "bytes_with_stride": 705600
+          }
+        ]
+      },
+      "application_input": {
+        "dtype": "uint8",
+        "layout": "NHWC",
+        "color": "RGB",
+        "shape": [
+          1,
+          640,
+          640,
+          3
+        ],
+        "batch_is_view": true,
+        "external_normalization": "none",
+        "external_transpose": false,
+        "interpolation": "opencv.INTER_LINEAR",
+        "byte_sha256": "8925f8880e5ac55b0f94d92da9fd7465a85511dab717a6905bacb37ada06fb59"
+      },
+      "outputs": [
+        {
+          "shape": [
+            1,
+            84,
+            8400
+          ],
+          "dtype": "float32",
+          "sha256": "15980ec51d201dda41b74e62917530cbb79d8be6a4bbab6d2ec561a48b830c30",
+          "min": 0.0,
+          "max": 641.0682983398438
+        }
+      ],
+      "input_accepted_by_real_runtime": true,
+      "normalization_semantics": "Project YOLO conversion sets mean=0,std=255; no new external normalization."
+    },
+    {
+      "name": "qwen448",
+      "model_path": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control/models/weights/qwen3vl4b_vision.rknn",
+      "model_sha256": "09732070437f63e04ca6ce8194d6f893e3c5acee05d6d4ed125720e0b2084b83",
+      "metadata_process": {
+        "returncode": 0,
+        "stdout": "I RKNN: [20:52:16.070] RKNN Runtime Information, librknnrt version: 2.3.2 (429f97ae6b@2025-04-09T09:09:27)\nI RKNN: [20:52:16.070] RKNN Driver Information, version: 0.9.6\nI RKNN: [20:52:17.490] RKNN Model Information, version: 6, toolkit version: 2.3.2(compiler version: 2.3.2 (e045de294f@2025-04-07T19:48:25)), target: RKNPU v2, target platform: rk3588, framework name: ONNX, framework layout: NCHW, model inference type: static_shape\nRKNN metadata: inputs=1 outputs=4\n",
+        "stderr": ""
+      },
+      "metadata": {
+        "schema_version": 1,
+        "model_path": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control/models/weights/qwen3vl4b_vision.rknn",
+        "runtime": "2.3.2 (429f97ae6b@2025-04-09T09:09:27)",
+        "driver": "0.9.6",
+        "metadata_only": true,
+        "inputs": [
+          {
+            "index": 0,
+            "name": "pixel",
+            "dims": [
+              1,
+              448,
+              448,
+              3
+            ],
+            "format": "NHWC",
+            "type": "FP16",
+            "quantization": 2,
+            "zero_point": 0,
+            "scale": 1,
+            "elements": 602112,
+            "bytes": 1204224,
+            "width_stride": 448,
+            "bytes_with_stride": 1204224
+          }
+        ],
+        "outputs": [
+          {
+            "index": 0,
+            "name": "4820",
+            "dims": [
+              196,
+              2560
+            ],
+            "format": "UNDEFINED",
+            "type": "FP16",
+            "quantization": 2,
+            "zero_point": 0,
+            "scale": 1,
+            "elements": 501760,
+            "bytes": 1003520,
+            "width_stride": 0,
+            "bytes_with_stride": 1003520
+          },
+          {
+            "index": 1,
+            "name": "1669",
+            "dims": [
+              196,
+              2560
+            ],
+            "format": "UNDEFINED",
+            "type": "FP16",
+            "quantization": 2,
+            "zero_point": 0,
+            "scale": 1,
+            "elements": 501760,
+            "bytes": 1003520,
+            "width_stride": 0,
+            "bytes_with_stride": 1003520
+          },
+          {
+            "index": 2,
+            "name": "2720",
+            "dims": [
+              196,
+              2560
+            ],
+            "format": "UNDEFINED",
+            "type": "FP16",
+            "quantization": 2,
+            "zero_point": 0,
+            "scale": 1,
+            "elements": 501760,
+            "bytes": 1003520,
+            "width_stride": 0,
+            "bytes_with_stride": 1003520
+          },
+          {
+            "index": 3,
+            "name": "3771",
+            "dims": [
+              196,
+              2560
+            ],
+            "format": "UNDEFINED",
+            "type": "FP16",
+            "quantization": 2,
+            "zero_point": 0,
+            "scale": 1,
+            "elements": 501760,
+            "bytes": 1003520,
+            "width_stride": 0,
+            "bytes_with_stride": 1003520
+          }
+        ]
+      },
+      "application_input": {
+        "dtype": "uint8",
+        "layout": "NHWC",
+        "color": "RGB",
+        "shape": [
+          1,
+          448,
+          448,
+          3
+        ],
+        "batch_is_view": true,
+        "external_normalization": "none",
+        "external_transpose": false,
+        "interpolation": "opencv.INTER_LINEAR",
+        "byte_sha256": "7776f7f1aa75aa0252d63561a7bacc53422acb64a8ddb56764084b0fde6be95c"
+      },
+      "outputs": [
+        {
+          "shape": [
+            196,
+            2560
+          ],
+          "dtype": "float32",
+          "sha256": "be8d6fef840bd70850530b78375f304b57bd0293511b3d3d3c2d3e66eb112a88",
+          "min": -5.99609375,
+          "max": 8.546875
+        },
+        {
+          "shape": [
+            196,
+            2560
+          ],
+          "dtype": "float32",
+          "sha256": "308efa9cb6b6c193ce8cbca6eeeeb5cfbe7190b773492c2661a43ed05ee1ea19",
+          "min": -7.29296875,
+          "max": 7.1796875
+        },
+        {
+          "shape": [
+            196,
+            2560
+          ],
+          "dtype": "float32",
+          "sha256": "af178892f1fc8266d402658b04b49593bffced43f1f5e14fee0e4f39fa2dc5e0",
+          "min": -2.89453125,
+          "max": 12.0703125
+        },
+        {
+          "shape": [
+            196,
+            2560
+          ],
+          "dtype": "float32",
+          "sha256": "65cd095e48ff9f849aec7d8e5a5849b2ca67a1282c6b3b98b2138cb77d7587e4",
+          "min": -4.28515625,
+          "max": 16.640625
+        }
+      ],
+      "input_accepted_by_real_runtime": true,
+      "normalization_semantics": "Vendor visual encoder: preserve existing application buffer; internal normalization not independently verified."
+    }
+  ],
+  "header_sha256": "c48e11a6f41b451a5fd1e4ad774ea60252d3d94f78bee9b21ea3d21b21deba9a",
+  "numpy": "1.26.4",
+  "opencv": "4.11.0",
+  "image_sha256": "99d864809a7355862032b54283bd4808971da5a2b976b20467203e6c192e755d",
+  "image_path": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control/data/calibration/images/000000000074.jpg",
+  "image_shape": [
+    426,
+    640,
+    3
+  ]
+}

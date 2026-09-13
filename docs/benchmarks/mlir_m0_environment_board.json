@@ -1,0 +1,328 @@
+{
+  "schema_version": 1,
+  "purpose": "M0 read-only MLIR preprocessing environment inventory",
+  "created_utc": "2026-09-12T13:22:31.368777+00:00",
+  "project_root": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control",
+  "platform": {
+    "system": "Linux",
+    "release": "5.10.160-rockchip-rk3588",
+    "version": "#1.0.6 SMP Fri Nov 8 23:22:23 CST 2024",
+    "architecture": "aarch64",
+    "status": "ok",
+    "architecture_source": "os.uname",
+    "version_source": "os.uname"
+  },
+  "current_python": {
+    "executable": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control/.venv-rknn/bin/python",
+    "version": "3.10.12 (main, Jul 15 2026, 23:40:17) [GCC 11.4.0]",
+    "version_info": [
+      3,
+      10,
+      12
+    ],
+    "implementation": "cpython"
+  },
+  "path_python_note": "tools.python is PATH's default Python; current_python is the running interpreter. packages describes only current_python.",
+  "tools": {
+    "python": {
+      "which": "/usr/bin/python",
+      "command": [
+        "/usr/bin/python",
+        "--version"
+      ],
+      "status": "ok",
+      "returncode": 0,
+      "stdout": "Python 3.10.12\n",
+      "stderr": "",
+      "timeout_seconds": 5
+    },
+    "ninja": {
+      "which": null,
+      "command": null,
+      "status": "missing",
+      "returncode": null,
+      "stdout": "",
+      "stderr": "",
+      "timeout_seconds": 5,
+      "reason": "Executable not found on PATH"
+    },
+    "clang": {
+      "which": null,
+      "command": null,
+      "status": "missing",
+      "returncode": null,
+      "stdout": "",
+      "stderr": "",
+      "timeout_seconds": 5,
+      "reason": "Executable not found on PATH"
+    },
+    "mlir-opt": {
+      "which": null,
+      "command": null,
+      "status": "missing",
+      "returncode": null,
+      "stdout": "",
+      "stderr": "",
+      "timeout_seconds": 5,
+      "reason": "Executable not found on PATH"
+    },
+    "mlir-translate": {
+      "which": null,
+      "command": null,
+      "status": "missing",
+      "returncode": null,
+      "stdout": "",
+      "stderr": "",
+      "timeout_seconds": 5,
+      "reason": "Executable not found on PATH"
+    },
+    "llc": {
+      "which": null,
+      "command": null,
+      "status": "missing",
+      "returncode": null,
+      "stdout": "",
+      "stderr": "",
+      "timeout_seconds": 5,
+      "reason": "Executable not found on PATH"
+    },
+    "cmake": {
+      "which": "/usr/bin/cmake",
+      "command": [
+        "/usr/bin/cmake",
+        "--version"
+      ],
+      "status": "ok",
+      "returncode": 0,
+      "stdout": "cmake version 3.22.1\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).\n",
+      "stderr": "",
+      "timeout_seconds": 5
+    },
+    "gcc": {
+      "which": "/usr/bin/gcc",
+      "command": [
+        "/usr/bin/gcc",
+        "--version"
+      ],
+      "status": "ok",
+      "returncode": 0,
+      "stdout": "gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "stderr": "",
+      "timeout_seconds": 5
+    },
+    "g++": {
+      "which": "/usr/bin/g++",
+      "command": [
+        "/usr/bin/g++",
+        "--version"
+      ],
+      "status": "ok",
+      "returncode": 0,
+      "stdout": "g++ (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "stderr": "",
+      "timeout_seconds": 5
+    },
+    "git": {
+      "which": "/usr/bin/git",
+      "command": [
+        "/usr/bin/git",
+        "--version"
+      ],
+      "status": "ok",
+      "returncode": 0,
+      "stdout": "git version 2.34.1\n",
+      "stderr": "",
+      "timeout_seconds": 5
+    }
+  },
+  "packages": {
+    "numpy": {
+      "status": "ok",
+      "version": "1.26.4",
+      "distributions": {
+        "numpy": "1.26.4"
+      },
+      "errors": {},
+      "checked_distributions": [
+        "numpy"
+      ],
+      "source": "importlib.metadata (current Python)",
+      "note": "Metadata only; does not establish module importability or active provider. OS-managed packages without distribution metadata may be unreported."
+    },
+    "cv2": {
+      "status": "ok",
+      "version": "4.11.0.86",
+      "distributions": {
+        "opencv-python": "4.11.0.86"
+      },
+      "errors": {},
+      "checked_distributions": [
+        "opencv-python",
+        "opencv-python-headless",
+        "opencv-contrib-python",
+        "opencv-contrib-python-headless",
+        "opencv",
+        "cv2"
+      ],
+      "source": "importlib.metadata (current Python)",
+      "note": "Metadata only; does not establish module importability or active provider. OS-managed packages without distribution metadata may be unreported."
+    },
+    "rknnlite": {
+      "status": "ok",
+      "version": "2.3.0",
+      "distributions": {
+        "rknn-toolkit-lite2": "2.3.0"
+      },
+      "errors": {},
+      "checked_distributions": [
+        "rknn-toolkit-lite2",
+        "rknn-toolkit-lite",
+        "rknnlite"
+      ],
+      "source": "importlib.metadata (current Python)",
+      "note": "Metadata only; does not establish module importability or active provider. OS-managed packages without distribution metadata may be unreported."
+    }
+  },
+  "disk_usage": {
+    "path": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control",
+    "status": "ok",
+    "unit": "bytes",
+    "total": 242600689664,
+    "used": 14062665728,
+    "free": 225978830848
+  },
+  "cpu": {
+    "logical_count": {
+      "status": "ok",
+      "value": 8
+    },
+    "affinity": {
+      "status": "ok",
+      "cpus": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "count": 8
+    },
+    "model": {
+      "status": "unknown",
+      "values": "unknown",
+      "source": "/proc/cpuinfo",
+      "reason": "No model text available; ARM identifiers may be in linux.cpuinfo.values"
+    },
+    "architecture": {
+      "status": "ok",
+      "value": "aarch64"
+    }
+  },
+  "linux": {
+    "status": "ok",
+    "meminfo": {
+      "path": "/proc/meminfo",
+      "status": "ok",
+      "values": {
+        "MemTotal": "16353832 kB",
+        "MemFree": "14190180 kB",
+        "MemAvailable": "15624460 kB",
+        "Buffers": "62876 kB",
+        "Cached": "1463568 kB",
+        "SwapCached": "0 kB",
+        "Active": "1132104 kB",
+        "Inactive": "697436 kB",
+        "Active(anon)": "920 kB",
+        "Inactive(anon)": "315428 kB",
+        "Active(file)": "1131184 kB",
+        "Inactive(file)": "382008 kB",
+        "Unevictable": "3168 kB",
+        "Mlocked": "64 kB",
+        "SwapTotal": "8176912 kB",
+        "SwapFree": "8176912 kB",
+        "Dirty": "60 kB",
+        "Writeback": "0 kB",
+        "AnonPages": "306304 kB",
+        "Mapped": "202036 kB",
+        "Shmem": "13248 kB",
+        "KReclaimable": "83744 kB",
+        "Slab": "150676 kB",
+        "SReclaimable": "83744 kB",
+        "SUnreclaim": "66932 kB",
+        "KernelStack": "5824 kB",
+        "PageTables": "8676 kB",
+        "NFS_Unstable": "0 kB",
+        "Bounce": "0 kB",
+        "WritebackTmp": "0 kB",
+        "CommitLimit": "16353828 kB",
+        "Committed_AS": "1755444 kB",
+        "VmallocTotal": "263061440 kB",
+        "VmallocUsed": "61984 kB",
+        "VmallocChunk": "0 kB",
+        "Percpu": "5184 kB",
+        "CmaTotal": "131072 kB",
+        "CmaAllocated": "6232 kB",
+        "CmaReleased": "124840 kB",
+        "CmaFree": "124840 kB",
+        "HugePages_Total": "0",
+        "HugePages_Free": "0",
+        "HugePages_Rsvd": "0",
+        "HugePages_Surp": "0",
+        "Hugepagesize": "2048 kB",
+        "Hugetlb": "0 kB"
+      }
+    },
+    "os_release": {
+      "path": "/etc/os-release",
+      "status": "ok",
+      "values": {
+        "PRETTY_NAME": "Orange Pi 1.0.6 Jammy",
+        "NAME": "Ubuntu",
+        "VERSION_ID": "22.04",
+        "VERSION": "22.04.5 LTS (Jammy Jellyfish)",
+        "VERSION_CODENAME": "jammy",
+        "ID": "ubuntu",
+        "ID_LIKE": "debian",
+        "HOME_URL": "https://www.ubuntu.com/",
+        "SUPPORT_URL": "https://help.ubuntu.com/",
+        "BUG_REPORT_URL": "https://bugs.launchpad.net/ubuntu/",
+        "PRIVACY_POLICY_URL": "https://www.ubuntu.com/legal/terms-and-policies/privacy-policy",
+        "UBUNTU_CODENAME": "jammy"
+      }
+    },
+    "cpuinfo": {
+      "path": "/proc/cpuinfo",
+      "status": "ok",
+      "values": {
+        "CPU implementer": [
+          "0x41"
+        ],
+        "CPU architecture": [
+          "8"
+        ],
+        "CPU variant": [
+          "0x2",
+          "0x4"
+        ],
+        "CPU part": [
+          "0xd05",
+          "0xd0b"
+        ],
+        "CPU revision": [
+          "0"
+        ]
+      }
+    }
+  },
+  "script_path": "/home/orangepi/project/edgeai-mlir-work/tools/collect_mlir_environment.py",
+  "script_sha256": "4a0d43f50e1998e0a20ec1c2cb0e3bd1b2a037125329cf705a0a8d7584cb190a",
+  "limitations": [
+    "Version strings and package metadata do not verify compiler or RKNN usability.",
+    "No hardware initialization, imports of inspected packages, build, installation, benchmark, environment dump, credentials, or SSH configuration collection.",
+    "CPU model is unknown without Linux model fields; affinity is unknown when unsupported.",
+    "PATH executables are trusted to honor --version; each call has a 5-second timeout."
+  ]
+}

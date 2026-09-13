@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "stage": "M5-M6",
+  "status": "measured",
+  "headline": "MLIR 后端已可选接入两个真实 RKNN 模型，但预处理慢 3.0-4.6 倍，且与 OpenCV 的 ±1 灰度级差异会改变模型原始输出；OpenCV 保持默认。",
+  "m5_integration": {
+    "backend_selection": {
+      "pipeline default backend": "opencv",
+      "pipeline mlir backend": "mlir",
+      "pipeline mlir variant": "fused_destination",
+      "pipeline reuses one instance per size": true,
+      "pipeline 448 is a separate instance": true,
+      "pipeline 448 output size": [
+        448,
+        448
+      ],
+      "pipeline 448 uses its own library": true,
+      "pipeline missing profile library raises": "BackendUnavailable: preprocess.libraries 中没有 profile 448x448 的库",
+      "pipeline mlir without library raises": "BackendUnavailable: mlir 后端必须给出库路径",
+      "detector default backend": "opencv",
+      "detector matches pipeline opencv bytewise": true,
+      "detector matches pipeline mlir bytewise": true,
+      "detector batch view shape": [
+        1,
+        640,
+        640,
+        3
+      ],
+      "repeated calls do not bleed between frames": true,
+      "entry default config backend": "opencv",
+      "entry --preprocess-backend mlir": {
+        "backend": "mlir",
+        "libraries": {
+          "640x640": "build/m4-final/640x640/fused_destination/libedgeai_preprocess.so",
+          "448x448": "build/m4-final/448x448/fused_destination/libedgeai_preprocess.so"
+        },
+        "manifest": null
+      },
+      "entry without flags": {
+        "backend": "opencv",
+        "libraries": {},
+        "manifest": null
+      },
+      "entry mlir without library exits": "SystemExit(2)"
+    },
+    "default_backend": "opencv",
+    "works_without_mlir": true,
+    "explicit_mlir_failure_is_loud": true,
+    "per_profile_library_required": "AOT 内核输出尺寸编译期固定，640/448 各需自己的 .so",
+    "tests": {
+      "file": "tools/test_mlir_preprocess.py",
+      "cases": 22,
+      "profiles_run": [
+        "640x640",
+        "448x448"
+      ],
+      "note": "缺 MLIR 库时这些用例失败而非跳过（--require-mlir）"
+    }
+  },
+  "m6_ab": [
+    {
+      "label": "yolov8n_int8 @ 640x640",
+      "model": {
+        "model_path": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control/models/weights/yolov8n_int8.rknn",
+        "model_sha256": "9b8bf4a871c55572b953be16f33403376f20ee72af93f879d1f185ea580c174a",
+        "core_mask": "NPU_CORE_AUTO"
+      },
+      "librknnrt": "librknnrt version: 2.3.2 (429f97ae6b@2025-04-09T09:09:27)",
+      "profile": [
+        640,
+        640
+      ],
+      "input_shape": [
+        480,
+        640
+      ],
+      "iterations": 100,
+      "mlir_variant": "fused_destination",
+      "preprocess_p50_us": {
+        "opencv": 9544.7,
+        "mlir": 29050.9
+      },
+      "inference_p50_us": {
+        "opencv": 38781.1,
+        "mlir": 37511.6
+      },
+      "preprocess_p50_ratio_mlir_vs_opencv": 3.044,
+      "total_p50_ratio_mlir_vs_opencv": 1.377,
+      "npu_determinism_control_identical": true,
+      "preprocess_vs_reference": {
+        "mlir_bytewise_identical": true,
+        "opencv_bytewise_identical": false,
+        "opencv_max_abs_diff": 1
+      },
+      "preprocess_opencv_vs_mlir": {
+        "max_abs_diff": 1,
+        "max_differing_share_percent": 6.01
+      },
+      "model_raw_output": {
+        "tensors_compared": 8,
+        "bytewise_identical": 0,
+        "max_abs_diff": 180.22,
+        "max_mean_abs_diff": 0.097776,
+        "max_differing_share_percent": 2.03
+      },
+      "conclusions": [
+        "两个后端的预处理输出不一致：最大像素差 1，最多 6.01% 的值不同。",
+        "对独立 Q11 参考：MLIR 逐字节一致，OpenCV 不一致（最大差 1）——差异由 OpenCV 的舍入实现引入，不是 MLIR 内核算错。",
+        "对照实验：同一输入连续两次推理结果一致，因此输出差异可归因于输入差异。",
+        "模型原始输出存在差异：最大绝对差 180.220，平均绝对差最大 0.097776，最多 2.03% 的元素不同。输入仅差 ±1 个灰度级即产生该输出差异，这是更换预处理实现的真实代价。",
+        "要做无缝默认替换，需先与部署所用 OpenCV 版本达到逐字节一致；当前仅近似一致，因此保留为显式实验后端。",
+        "MLIR 预处理 P50 是 OpenCV 的 3.04 倍，更慢。",
+        "无标注数据与后处理解码，因此不报 mAP、检测精度保持或实机定位精度。",
+        "OpenCV 保持默认后端；MLIR 仍为显式实验后端。"
+      ]
+    },
+    {
+      "label": "qwen3vl4b_vision @ 448x448",
+      "model": {
+        "model_path": "/home/orangepi/project/EdgeAI-Robotic-Arm-Control/models/weights/qwen3vl4b_vision.rknn",
+        "model_sha256": "09732070437f63e04ca6ce8194d6f893e3c5acee05d6d4ed125720e0b2084b83",
+        "core_mask": "NPU_CORE_AUTO"
+      },
+      "librknnrt": "librknnrt version: 2.3.2 (429f97ae6b@2025-04-09T09:09:27)",
+      "profile": [
+        448,
+        448
+      ],
+      "input_shape": [
+        480,
+        640
+      ],
+      "iterations": 40,
+      "mlir_variant": "fused_destination",
+      "preprocess_p50_us": {
+        "opencv": 2096.5,
+        "mlir": 9708.9
+      },
+      "inference_p50_us": {
+        "opencv": 3224505.0,
+        "mlir": 3210285.9
+      },
+      "preprocess_p50_ratio_mlir_vs_opencv": 4.631,
+      "total_p50_ratio_mlir_vs_opencv": 0.998,
+      "npu_determinism_control_identical": true,
+      "preprocess_vs_reference": {
+        "mlir_bytewise_identical": true,
+        "opencv_bytewise_identical": false,
+        "opencv_max_abs_diff": 1
+      },
+      "preprocess_opencv_vs_mlir": {
+        "max_abs_diff": 1,
+        "max_differing_share_percent": 12.53
+      },
+      "model_raw_output": {
+        "tensors_compared": 32,
+        "bytewise_identical": 0,
+        "max_abs_diff": 5.07,
+        "max_mean_abs_diff": 0.03635,
+        "max_differing_share_percent": 99.28
+      },
+      "conclusions": [
+        "两个后端的预处理输出不一致：最大像素差 1，最多 12.53% 的值不同。",
+        "对独立 Q11 参考：MLIR 逐字节一致，OpenCV 不一致（最大差 1）——差异由 OpenCV 的舍入实现引入，不是 MLIR 内核算错。",
+        "对照实验：同一输入连续两次推理结果一致，因此输出差异可归因于输入差异。",
+        "模型原始输出存在差异：最大绝对差 5.070，平均绝对差最大 0.036350，最多 99.28% 的元素不同。输入仅差 ±1 个灰度级即产生该输出差异，这是更换预处理实现的真实代价。",
+        "要做无缝默认替换，需先与部署所用 OpenCV 版本达到逐字节一致；当前仅近似一致，因此保留为显式实验后端。",
+        "MLIR 预处理 P50 是 OpenCV 的 4.63 倍，更慢。",
+        "无标注数据与后处理解码，因此不报 mAP、检测精度保持或实机定位精度。",
+        "OpenCV 保持默认后端；MLIR 仍为显式实验后端。"
+      ]
+    }
+  ],
+  "m6_reproduction": {
+    "fresh_directory": "build/m6-verify",
+    "ir_and_assembly_artifacts_matching_sha256": 312,
+    "ir_and_assembly_artifacts_differing": 0,
+    "kernels_revalidated": 52,
+    "ab_rerun_preprocess_ratio": 3.062,
+    "note": "从零重建的 IR/汇编与原产物逐字节一致，A/B 结论未变"
+  },
+  "limitations": [
+    "单核（taskset -c 4）单线程，单一输入尺寸 480x640。",
+    "耗时由逐次计时推导，不是持续吞吐（timing-derived, not sustained throughput）。",
+    "无标注数据与后处理解码，因此不报 mAP、检测精度保持或实机定位精度。",
+    "模型输出比较是原始张量比较，不构成精度评估。",
+    "Qwen 视觉编码器单次推理约 3.2 秒，样本量小于 YOLO（40 次对 100 次）。",
+    "未做多路并发与端到端抓取验证；本期不联调舵机。"
+  ],
+  "decisions": [
+    "OpenCV 保持默认后端，MLIR 仅在显式配置时启用。",
+    "无缝默认替换的前提是与部署所用 OpenCV 版本逐字节一致；当前仅近似一致。",
+    "MLIR 内核与独立 Q11 参考逐字节一致，偏离参考的是 OpenCV 的舍入实现。"
+  ]
+}
