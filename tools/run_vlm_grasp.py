@@ -36,6 +36,9 @@ DEFAULT_CONFIG = {
     "arm": {"i2c": {"bus": 7, "address": 0x40, "channels": [0, 1, 2, 3]}},
     "hand_eye": {"mm_per_pixel": 0.5, "center_u": 320, "center_v": 240, "base_x": 150.0},
     "pipeline": {"safe_z_height": 150.0, "grasp_z_height": 30.0},
+    # 默认 OpenCV。MLIR 是显式实验后端，实测比 OpenCV 慢，别当默认用。
+    # AOT 内核输出尺寸编译期固定，所以 640/448 两路各自指定库。
+    "preprocess": {"backend": "opencv", "libraries": {}, "manifest": None},
 }
 
 
@@ -45,9 +48,26 @@ def main():
     ap.add_argument("--interactive", action="store_true", help="进入交互模式")
     ap.add_argument("--mock", action="store_true", help="强制 Mock（不下发真实动作）")
     ap.add_argument("--no-vlm", action="store_true", help="跳过 VLM，仅用规则引擎")
+    ap.add_argument("--preprocess-backend", choices=("opencv", "mlir"), default="opencv",
+                    help="预处理后端，默认 opencv；mlir 为实验后端，实测更慢")
+    ap.add_argument("--preprocess-library", action="append", metavar="HxW=PATH", default=[],
+                    help="mlir 后端按 profile 指定库，如 640x640=/path/libedgeai_preprocess.so；可重复")
+    ap.add_argument("--preprocess-manifest", help="mlir 后端的构建 manifest.json 路径")
     args = ap.parse_args()
 
+    libraries = {}
+    for item in args.preprocess_library:
+        key, separator, path = item.partition("=")
+        if not separator or not path:
+            ap.error("--preprocess-library 需要 HxW=PATH 形式，收到 " + item)
+        libraries[key] = path
+    if args.preprocess_backend == "mlir" and not libraries:
+        ap.error("--preprocess-backend mlir 必须给出至少一个 --preprocess-library HxW=PATH")
+
     cfg = dict(DEFAULT_CONFIG)
+    cfg["preprocess"] = {"backend": args.preprocess_backend,
+                         "libraries": libraries,
+                         "manifest": args.preprocess_manifest}
     if args.no_vlm:
         cfg["vlm"] = {"model_path": "__disabled__", "vision_path": "__disabled__"}
 

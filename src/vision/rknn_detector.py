@@ -23,13 +23,22 @@ except ImportError:
 class RKNNObjectDetector:
     """RK3588 板载 NPU 目标检测器 (基于 rknn-toolkit-lite2)"""
 
-    def __init__(self, model_path: str, target_size=(640, 640), conf_thresh=0.5, nms_thresh=0.45):
+    def __init__(self, model_path: str, target_size=(640, 640), conf_thresh=0.5, nms_thresh=0.45,
+                 preprocess_backend: str = "opencv", preprocess_library=None,
+                 preprocess_manifest=None):
         self.model_path = model_path
         self.target_size = target_size
         self.conf_thresh = conf_thresh
         self.nms_thresh = nms_thresh
         self.rknn = None
         self.is_loaded = False
+        # 与 pipeline 共用同一个预处理实现，避免两处逻辑漂移。
+        self._preprocess_config = {
+            "backend": preprocess_backend,
+            "library": preprocess_library,
+            "manifest": preprocess_manifest,
+        }
+        self._preprocessor = None
 
     def init_model(self) -> bool:
         if not HAS_RKNN_LITE:
@@ -57,13 +66,25 @@ class RKNNObjectDetector:
         print("[RKNN] NPU 运行时初始化成功 (RK3588 6TOPS 加速)")
         return True
 
+    @property
+    def preprocessor(self):
+        """惰性创建；显式 mlir 后端不可用时抛错，不静默退回 OpenCV。"""
+        if self._preprocessor is None:
+            from src.vision.preprocess import Preprocessor
+            # target_size 沿用 (w, h) 的历史约定，Preprocessor 用 (h, w)。
+            width, height = self.target_size
+            self._preprocessor = Preprocessor(
+                output_size=(height, width),
+                backend=self._preprocess_config["backend"],
+                library=self._preprocess_config["library"],
+                manifest=self._preprocess_config["manifest"])
+        return self._preprocessor
+
     def preprocess(self, img: Any) -> Any:
-        """保持比例或者直接缩放至网络输入尺寸"""
-        if not HAS_CV2 or img is None:
+        """缩放到网络输入尺寸并转 RGB；不做 letterbox、不做归一化。"""
+        if img is None:
             return img
-        resized = cv2.resize(img, self.target_size)
-        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-        return rgb
+        return self.preprocessor.run(img)
 
     def detect(self, frame: Any) -> List[Dict[str, Any]]:
         """输入原始画面，返回检测框及中心像素点坐标"""
@@ -79,8 +100,7 @@ class RKNNObjectDetector:
                 "center": (int(w * 0.5), int(h * 0.5))
             }]
 
-        input_data = self.preprocess(frame)
-        input_data = np.expand_dims(input_data, axis=0)
+        input_data = self.preprocessor.run_batch1(frame)
 
         # 送入 NPU 执行推理
         outputs = self.rknn.inference(inputs=[input_data])
@@ -95,6 +115,9 @@ class RKNNObjectDetector:
         return []
 
     def release(self):
+        if self._preprocessor is not None:
+            self._preprocessor.close()
+            self._preprocessor = None
         if self.rknn is not None:
             self.rknn.release()
             print("[RKNN] 释放 NPU 资源")

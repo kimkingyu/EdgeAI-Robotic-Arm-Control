@@ -59,11 +59,17 @@ class VLMGraspPipeline:
         self.kinematics = None
         self.hand_eye = None
 
+        # 640 给 YOLO、448 给 VLM，两处共用同一个后端实现，避免预处理逻辑漂移。
+        # 后端默认 OpenCV；配 preprocess.backend=mlir 才走 MLIR，且失败直接报错。
+        self._preprocessors: Dict[Tuple[int, int], Any] = {}
+
         self.stats: Dict[str, Any] = {
             "frames_captured": 0,
             "vlm_calls": 0,
             "actions_executed": 0,
             "last_vlm_perf": None,
+            "preprocess_backend": None,
+            "last_preprocess": None,
         }
 
     # ── 初始化 ──────────────────────────────────────────────────────────
@@ -195,17 +201,32 @@ class VLMGraspPipeline:
             return cv2.imread(fallback)
         return None
 
+    def preprocessor(self, output_size: Tuple[int, int]):
+        """按输出尺寸取预处理器；显式 mlir 后端失败时抛错，不悄悄退回 OpenCV。"""
+        existing = self._preprocessors.get(output_size)
+        if existing is not None:
+            return existing
+        from src.vision.preprocess import from_config
+        created = from_config(self.config, output_size)
+        self._preprocessors[output_size] = created
+        self.stats["preprocess_backend"] = created.describe()
+        return created
+
     def locate_targets(self, frame) -> List[Dict[str, Any]]:
         """YOLO 高频定位：给出目标的像素坐标（VLM 只做语义，不给精确坐标）"""
         if self.detector is None or frame is None or not HAS_CV2:
             return []
         try:
-            img = cv2.resize(frame, (640, 640))
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            pre = self.preprocessor((640, 640))
+            batch = pre.run_batch1(frame)
+            self.stats["last_preprocess"] = dict(pre.last_timings)
+            # 预处理单独计时；不把它算进推理耗时，也不拿旧的"定位耗时"当预处理基线。
+            print(f"[YOLO] 预处理 {pre.last_timings['total_ns'] / 1e6:.1f} ms"
+                  f"（{pre.backend_name}）")
             t0 = time.perf_counter()
-            self.detector.infer(np.expand_dims(img, 0))
+            self.detector.infer(batch)
             cost = (time.perf_counter() - t0) * 1000
-            print(f"[YOLO] 定位耗时 {cost:.1f} ms")
+            print(f"[YOLO] 推理耗时 {cost:.1f} ms")
         except Exception as e:
             print(f"[YOLO] 推理异常: {str(e)[:80]}")
         return []
@@ -218,9 +239,9 @@ class VLMGraspPipeline:
             return self._rule_fallback(instruction)
 
         if HAS_CV2 and HAS_NUMPY:
-            img = cv2.resize(frame, (448, 448))
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = np.expand_dims(img, 0)
+            pre = self.preprocessor((448, 448))
+            img = pre.run_batch1(frame)
+            self.stats["last_preprocess"] = dict(pre.last_timings)
         else:
             return self._rule_fallback(instruction)
 
@@ -384,9 +405,16 @@ class VLMGraspPipeline:
         if s["last_vlm_perf"]:
             p = s["last_vlm_perf"]
             print(f"       末次 VLM: TTFT {p.get('ttft_ms')} ms | {p.get('tps')} tok/s")
+        if s["preprocess_backend"]:
+            b = s["preprocess_backend"]
+            print(f"       预处理后端: {b['backend']}"
+                  + (f"（variant {b['variant']}）" if b.get("variant") else ""))
         print("-" * 70)
 
     def stop(self):
+        for pre in self._preprocessors.values():
+            pre.close()
+        self._preprocessors.clear()
         if self.camera:
             self.camera.stop()
         if self.detector:
