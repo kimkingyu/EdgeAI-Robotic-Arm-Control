@@ -428,5 +428,15 @@
     "why": "计划要求 OpenCV 保持默认、MLIR 为显式后端，且缺库必须报错而不是静默退回后仍报 MLIR 耗时。发现 AOT 内核输出尺寸编译期固定，单一 library 配置无法同时服务 640 和 448，改为按 profile 查找 libraries，缺失即报错而不是拿错尺寸的库硬凑。模型输出出现差异时不直接归因，先加确定性对照和独立参考比较来定位来源。",
     "evidence": "M5：22 项测试在 640x640 与 448x448 两个 profile 全通过（含 ROI、连续调用不串帧、4 线程独立输出、尺寸切换重建 context 并单列创建耗时、manifest 与 profile 核对）；--require-mlir 缺库退出码 1 属 failure 非 skip；无 MLIR 库时两个 profile 均回落 OpenCV、detector 正常、导入期不加载任何 .so；入口选项实测落到配置，--preprocess-backend mlir 缺库 SystemExit(2)。M6 真实 librknnrt 2.3.2 + 真实权重：yolov8n_int8@640 预处理 OpenCV 9544.7us vs MLIR 29050.9us（3.04x 慢），qwen3vl4b_vision@448 为 2096.5us vs 9708.9us（4.63x 慢）。关键发现：两后端预处理仅差 1 个灰度级（YOLO 6.01%、Qwen 12.53% 的值不同），但模型原始输出不一致——YOLO 8 个张量最大绝对差 180.220、平均 0.097776、2.03% 元素不同；Qwen 32 个张量最大 5.070、99.28% 元素不同。归因证据：同一输入连续两次推理逐字节一致证明 NPU 确定；对独立 Q11 参考 MLIR 逐字节一致而 OpenCV 不一致（最大差 1），说明偏离参考的是 OpenCV 舍入而非 MLIR 算错。复验：全新目录重建 312 个 IR/汇编产物 SHA256 全部一致、0 个不同，52 个内核重新通过正确性，A/B 复跑 3.06x 结论未变。因慢且输出不等价，OpenCV 保持默认。",
     "value": "完成编译器产物到真实 NPU 推理链路的可选接入与 A/B 验证，能设计确定性对照实验区分 NPU 非确定性与输入差异、用独立定点参考定位数值偏差归属方，并识别出 ±1 灰度级预处理差异经模型放大后不可忽略，从而拒绝看似等价的默认替换。"
+  },
+  {
+    "step": "44",
+    "timestamp": "2026-09-13 22:58:14",
+    "title": "MLIR M0-M6 成果分组提交并推送至 GitHub",
+    "module": "Git/Release",
+    "how": "先核查工作树：确认 compiler/ 与 scripts/mlir/ 共 329KB 全为源码无二进制，扫描 password/secret/private key/AKIA 等模式仅命中测试路径与模型 token 计数，确认 meta_tmp.json 已被 .gitignore 第19行 /*_tmp.json 忽略、未被追踪。按语义分 4 次提交：编译器工程与工具链脚本（28文件）、统一预处理后端接入（5文件）、基准与 A/B 工具（8文件）、文档与结构化证据（22文件）。git fetch 确认远端无未合并提交后 git push -u origin main 建立追踪。",
+    "why": "分组提交让每个改动的意图独立可读，而不是一次性堆成一个巨大提交。提交信息写清为什么这么做与负面结论，不粉饰未达成的性能目标。推送前逐项核查敏感信息与大文件，避免把凭据或临时文件带进公开仓库。",
+    "evidence": "4 个提交：d7f0bf9 编译器工程、8774cda 后端接入、c67d533 基准工具、22ddfd2 文档证据。共 63 文件 48979 行新增、15 行删除。推送结果 8906eb4..22ddfd2 快进成功，git ls-remote 远端 refs/heads/main 为 22ddfd2bc70c2fd05afb66b31f32b127d4afd0c7，与本地 git rev-parse main 完全一致，git status -sb 显示 main...origin/main 无分歧，工作树干净。大体积逐轮日志由 .gitignore 的 build/ 规则挡在仓库外，仅结构化摘要与 IR 小样例入库（最大单文件 mlir_m0_opencv_summary.json 1.5MB，内容为 80 个 batch 的聚合统计非逐次原始样本）。",
+    "value": "按语义边界组织提交历史并在提交信息中如实记录负面结论与验证边界，推送前完成敏感信息扫描、大文件核查与远端状态确认，保证公开仓库的可复现性与可审计性。"
   }
 ]
