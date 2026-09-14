@@ -858,3 +858,22 @@ M4 纯 CPU 负载 1156 次采样仅第 0 点（基准未开始）为 2256MHz，�
 > 💡 **亮点提炼**：识别出边界快照无法证明过程稳定性并自主补齐连续监控，用同一内核跨环境对照量化降频对比值的压缩效应，主动推翻并订正自己先前偏乐观的性能数字；同时避免了删除被误判为冗余的热漂移证据。
 
 ---
+
+## 📍 第 46 步：排查GitHub推送阻塞：定位本地代理通道完成推送
+* **记录时间**：`2026-09-14 12:59:06` ｜ **技术模块**：`[Git/Network]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+不再重复重试直连，改为逐条排查：nslookup 确认 DNS 正常（github.com -> 20.205.243.166）排除解析问题；curl 直连 443 无响应确认端口被阻断；ssh -p 443 git@ssh.github.com 返回 Permission denied (publickey) 证明该通道 TCP 与 SSH 握手均成功、仅缺密钥；用 IdentitiesOnly=yes 分别测试 id_ed25519 与 id_ed25519_cliproxy_relay 两把现有密钥均未注册到 GitHub 账户；板端 curl 同样不通排除中转；netstat 发现 127.0.0.1:7890 有代理监听，curl -x 验证 0.594s 返回 HTTP 200。最终用 git -c http.proxy=http://127.0.0.1:7890 推送，仅对单次命令生效，不写入全局 git config。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+上一回合把网络不通直接判为外部硬阻塞就停了，但当时只试过 HTTPS 直连一条路径，没有穷尽可选通道。重试同一失败命令不产生新信息，应改为分层定位：先分离 DNS/TCP/认证三层，再找替代通道。用 -c 传参而非 git config --global 是为了不污染仓库与用户全局配置。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+直连 git ls-remote 报 Recv failure: Connection was reset；DNS 解析正常；ssh.github.com:443 握手成功仅拒绝公钥；两把本地密钥均 Permission denied；板端 curl 不通；127.0.0.1:7890 代理 curl 返回 HTTP 200 耗时 0.594s。经代理 ls-remote 读到远端 6984653 与上次推送一致、无他人新提交，推送结果 6984653..fa80cb9。校验远端 refs/heads/main 为 fa80cb91c97cdebb303a6ff24855364d707c8790，与本地 git rev-parse main 完全一致，git status -sb 显示 main...origin/main 无分歧。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：面对网络阻塞用分层排查替代无效重试，通过区分 TCP 握手成功与认证失败快速排除 SSH 通道、发现并验证本地代理作为可用路径，且以单次命令参数而非全局配置完成推送，避免留下隐式环境依赖。
+
+---

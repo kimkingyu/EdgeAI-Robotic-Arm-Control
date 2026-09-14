@@ -448,5 +448,15 @@
     "why": "边界快照只有首尾 2 次采样，只能证明起止未降频，我原先只能把它写成局限。既然可以自主补测就不该停在局限上。发现 M6 大幅降频后，不直接断言比值被污染，而是用同一内核在两种环境下的绝对耗时做对照量化影响。",
     "evidence": "M4 纯 CPU 负载 1156 次采样仅第 0 点（基准未开始）为 2256MHz，其余全程 2400MHz，低于满频占比 0.087%，58 秒全覆盖。M6 混合负载 308 次采样有 215 次低于满频（69.8%），频率在 408MHz-2400MHz 全档位跳动，原因是 NPU 推理占 38ms、预处理仅 9.5ms，CPU 等待时 ondemand 降频。同一 fused_destination 内核对照：OpenCV 4359.2us(满频)->9595.9us(降频) 劣化 2.20 倍，MLIR 19103.1us->29009.8us 劣化 1.52 倍，因受影响程度不同比值从 4.38 被压缩到 3.02。确认非过热：soc-thermal 降频点 75C，实测最高 60.1C，余量 15C。据此订正 docs/MLIR_PREPROCESS_BUILD.md 与 mlir_m56_summary.json 的 headline，把原先偏乐观的 3.0 倍标注为污染结果，以 M4 的 4.38 倍为干净基准。",
     "value": "识别出边界快照无法证明过程稳定性并自主补齐连续监控，用同一内核跨环境对照量化降频对比值的压缩效应，主动推翻并订正自己先前偏乐观的性能数字；同时避免了删除被误判为冗余的热漂移证据。"
+  },
+  {
+    "step": "46",
+    "timestamp": "2026-09-14 12:59:06",
+    "title": "排查GitHub推送阻塞：定位本地代理通道完成推送",
+    "module": "Git/Network",
+    "how": "不再重复重试直连，改为逐条排查：nslookup 确认 DNS 正常（github.com -> 20.205.243.166）排除解析问题；curl 直连 443 无响应确认端口被阻断；ssh -p 443 git@ssh.github.com 返回 Permission denied (publickey) 证明该通道 TCP 与 SSH 握手均成功、仅缺密钥；用 IdentitiesOnly=yes 分别测试 id_ed25519 与 id_ed25519_cliproxy_relay 两把现有密钥均未注册到 GitHub 账户；板端 curl 同样不通排除中转；netstat 发现 127.0.0.1:7890 有代理监听，curl -x 验证 0.594s 返回 HTTP 200。最终用 git -c http.proxy=http://127.0.0.1:7890 推送，仅对单次命令生效，不写入全局 git config。",
+    "why": "上一回合把网络不通直接判为外部硬阻塞就停了，但当时只试过 HTTPS 直连一条路径，没有穷尽可选通道。重试同一失败命令不产生新信息，应改为分层定位：先分离 DNS/TCP/认证三层，再找替代通道。用 -c 传参而非 git config --global 是为了不污染仓库与用户全局配置。",
+    "evidence": "直连 git ls-remote 报 Recv failure: Connection was reset；DNS 解析正常；ssh.github.com:443 握手成功仅拒绝公钥；两把本地密钥均 Permission denied；板端 curl 不通；127.0.0.1:7890 代理 curl 返回 HTTP 200 耗时 0.594s。经代理 ls-remote 读到远端 6984653 与上次推送一致、无他人新提交，推送结果 6984653..fa80cb9。校验远端 refs/heads/main 为 fa80cb91c97cdebb303a6ff24855364d707c8790，与本地 git rev-parse main 完全一致，git status -sb 显示 main...origin/main 无分歧。",
+    "value": "面对网络阻塞用分层排查替代无效重试，通过区分 TCP 握手成功与认证失败快速排除 SSH 通道、发现并验证本地代理作为可用路径，且以单次命令参数而非全局配置完成推送，避免留下隐式环境依赖。"
   }
 ]
