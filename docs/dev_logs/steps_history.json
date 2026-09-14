@@ -438,5 +438,15 @@
     "why": "分组提交让每个改动的意图独立可读，而不是一次性堆成一个巨大提交。提交信息写清为什么这么做与负面结论，不粉饰未达成的性能目标。推送前逐项核查敏感信息与大文件，避免把凭据或临时文件带进公开仓库。",
     "evidence": "4 个提交：d7f0bf9 编译器工程、8774cda 后端接入、c67d533 基准工具、22ddfd2 文档证据。共 63 文件 48979 行新增、15 行删除。推送结果 8906eb4..22ddfd2 快进成功，git ls-remote 远端 refs/heads/main 为 22ddfd2bc70c2fd05afb66b31f32b127d4afd0c7，与本地 git rev-parse main 完全一致，git status -sb 显示 main...origin/main 无分歧，工作树干净。大体积逐轮日志由 .gitignore 的 build/ 规则挡在仓库外，仅结构化摘要与 IR 小样例入库（最大单文件 mlir_m0_opencv_summary.json 1.5MB，内容为 80 个 batch 的聚合统计非逐次原始样本）。",
     "value": "按语义边界组织提交历史并在提交信息中如实记录负面结论与验证边界，推送前完成敏感信息扫描、大文件核查与远端状态确认，保证公开仓库的可复现性与可审计性。"
+  },
+  {
+    "step": "45",
+    "timestamp": "2026-09-14 12:48:28",
+    "title": "连续频率监控推翻M6比值：发现ondemand降频把4.38倍压缩成3.02倍并订正文档",
+    "module": "MLIR/Benchmark/Validation",
+    "how": "先核查 mlir_m0_opencv_summary.json 的 1.5MB 是否为冗余：160 个 sysfs 快照哈希全不相同、温度从 39.8C 单调升至 50.8C，确认是完整热漂移轨迹而非重复，撤销原先要精简它的判断。新增 compiler/tests/monitor_frequency.py 以独立线程 50ms 间隔只读采样绑定核 scaling_cur_freq 与 thermal zone，不写 governor。修复两个自身缺陷：字段名 _stop 覆盖 threading.Thread 内部方法导致 join 超时路径崩溃（改名 _halt），以及收尾异常会丢弃已采集样本（stop 失败只告警不吞数据）。用它重跑 M4 消融与 M6 A/B。",
+    "why": "边界快照只有首尾 2 次采样，只能证明起止未降频，我原先只能把它写成局限。既然可以自主补测就不该停在局限上。发现 M6 大幅降频后，不直接断言比值被污染，而是用同一内核在两种环境下的绝对耗时做对照量化影响。",
+    "evidence": "M4 纯 CPU 负载 1156 次采样仅第 0 点（基准未开始）为 2256MHz，其余全程 2400MHz，低于满频占比 0.087%，58 秒全覆盖。M6 混合负载 308 次采样有 215 次低于满频（69.8%），频率在 408MHz-2400MHz 全档位跳动，原因是 NPU 推理占 38ms、预处理仅 9.5ms，CPU 等待时 ondemand 降频。同一 fused_destination 内核对照：OpenCV 4359.2us(满频)->9595.9us(降频) 劣化 2.20 倍，MLIR 19103.1us->29009.8us 劣化 1.52 倍，因受影响程度不同比值从 4.38 被压缩到 3.02。确认非过热：soc-thermal 降频点 75C，实测最高 60.1C，余量 15C。据此订正 docs/MLIR_PREPROCESS_BUILD.md 与 mlir_m56_summary.json 的 headline，把原先偏乐观的 3.0 倍标注为污染结果，以 M4 的 4.38 倍为干净基准。",
+    "value": "识别出边界快照无法证明过程稳定性并自主补齐连续监控，用同一内核跨环境对照量化降频对比值的压缩效应，主动推翻并订正自己先前偏乐观的性能数字；同时避免了删除被误判为冗余的热漂移证据。"
   }
 ]

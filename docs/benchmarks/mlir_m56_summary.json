@@ -2,7 +2,7 @@
   "schema_version": 1,
   "stage": "M5-M6",
   "status": "measured",
-  "headline": "MLIR 后端已可选接入两个真实 RKNN 模型，但预处理慢 3.0-4.6 倍，且与 OpenCV 的 ±1 灰度级差异会改变模型原始输出；OpenCV 保持默认。",
+  "headline": "MLIR 后端已可选接入两个真实 RKNN 模型，但预处理更慢：纯 CPU 满频条件下 4.38 倍（M4），混合负载下测得的 3.0 倍是 CPU 降频压缩后的结果不可用作内核比较；且与 OpenCV 的 ±1 灰度级差异会改变模型原始输出。OpenCV 保持默认。",
   "m5_integration": {
     "backend_selection": {
       "pipeline default backend": "opencv",
@@ -185,11 +185,139 @@
     "无标注数据与后处理解码，因此不报 mAP、检测精度保持或实机定位精度。",
     "模型输出比较是原始张量比较，不构成精度评估。",
     "Qwen 视觉编码器单次推理约 3.2 秒，样本量小于 YOLO（40 次对 100 次）。",
-    "未做多路并发与端到端抓取验证；本期不联调舵机。"
+    "未做多路并发与端到端抓取验证；本期不联调舵机。",
+    "M6 的绝对耗时与比值受 CPU 降频污染，预处理内核的相对性能应以 M4 的满频数据为准。"
   ],
   "decisions": [
     "OpenCV 保持默认后端，MLIR 仅在显式配置时启用。",
     "无缝默认替换的前提是与部署所用 OpenCV 版本逐字节一致；当前仅近似一致。",
     "MLIR 内核与独立 Q11 参考逐字节一致，偏离参考的是 OpenCV 的舍入实现。"
-  ]
+  ],
+  "measurement_conditions": {
+    "bound_cpu": 4,
+    "governor": "ondemand (未写入任何 sysfs)",
+    "soc_thermal_trip_points_c": [
+      75,
+      85,
+      115
+    ],
+    "policy4_available_khz_range": [
+      408000,
+      2400000
+    ],
+    "per_stage": [
+      {
+        "samples": 160,
+        "frequency_khz_unique": [
+          2400000
+        ],
+        "constant_at_max": true,
+        "temperature_c_min": 38.85,
+        "temperature_c_max": 51.77,
+        "stage": "M0 OpenCV 基线"
+      },
+      {
+        "samples": 2,
+        "frequency_khz_unique": [
+          2400000
+        ],
+        "constant_at_max": true,
+        "temperature_c_min": 49.92,
+        "temperature_c_max": 53.62,
+        "stage": "M4 消融 640x640"
+      },
+      {
+        "samples": 2,
+        "frequency_khz_unique": [
+          2400000
+        ],
+        "constant_at_max": true,
+        "temperature_c_min": 50.85,
+        "temperature_c_max": 53.62,
+        "stage": "M4 消融 448x448"
+      },
+      {
+        "samples": 2,
+        "frequency_khz_unique": [
+          2400000
+        ],
+        "constant_at_max": true,
+        "temperature_c_min": 49.92,
+        "temperature_c_max": 53.62,
+        "stage": "M6 A/B yolo640"
+      },
+      {
+        "samples": 2,
+        "frequency_khz_unique": [
+          2400000
+        ],
+        "constant_at_max": true,
+        "temperature_c_min": 50.85,
+        "temperature_c_max": 60.08,
+        "stage": "M6 A/B qwen448"
+      },
+      {
+        "samples": 2,
+        "frequency_khz_unique": [
+          2400000
+        ],
+        "constant_at_max": true,
+        "temperature_c_min": 49.92,
+        "temperature_c_max": 53.62,
+        "stage": "M6 复验 yolo640"
+      }
+    ],
+    "note": "M4/M6 仅首尾 2 次采样，只能证明起止未降频，不能排除过程中短暂降频；只有 M0 的 160 次采样具备过程覆盖。",
+    "continuous_monitoring": {
+      "tool": "compiler/tests/monitor_frequency.py",
+      "interval_ms": 50,
+      "m4_pure_cpu": {
+        "sample_count": 1156,
+        "frequency_khz_unique": [
+          2256000,
+          2400000
+        ],
+        "share_below_top_percent": 0.087,
+        "held_top_throughout": false
+      },
+      "m6_mixed_load": {
+        "sample_count": 308,
+        "frequency_khz_unique": [
+          408000,
+          600000,
+          816000,
+          1008000,
+          1200000,
+          1416000,
+          1608000,
+          1800000,
+          2016000,
+          2208000,
+          2256000,
+          2304000,
+          2400000
+        ],
+        "share_below_top_percent": 69.805,
+        "held_top_throughout": false
+      },
+      "same_kernel_comparison": {
+        "opencv_p50_us": {
+          "m4_full_speed": 4359.2,
+          "m6_throttled": 9595.9,
+          "degradation": 2.2
+        },
+        "mlir_p50_us": {
+          "m4_full_speed": 19103.1,
+          "m6_throttled": 29009.8,
+          "degradation": 1.52
+        },
+        "ratio": {
+          "m4_full_speed": 4.38,
+          "m6_throttled": 3.02
+        }
+      },
+      "finding": "NPU 推理期间 ondemand 降频，OpenCV 与 MLIR 受影响程度不同（2.20x vs 1.52x），把比值从 4.38 压缩到 3.02。M6 的 3.0x 是污染结果，干净条件下是 M4 的 4.38x。",
+      "root_cause": "负载响应而非过热：soc-thermal 降频点 75C，实测最高 60.1C。"
+    }
+  }
 }
