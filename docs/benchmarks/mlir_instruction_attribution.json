@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "stage": "M4 后续：指令级归因",
+  "status": "analyzed",
+  "question": "PMU 测出 MLIR 每输出字节指令数是 OpenCV 的 7.1 倍，这些指令花在哪",
+  "measured_baseline": {
+    "opencv_instructions_per_output_byte": 11.5886,
+    "mlir_instructions_per_output_byte": 82.3779,
+    "ratio": 7.11,
+    "source": "docs/benchmarks/mlir_pmu_attribution.json"
+  },
+  "finding_1_scalar_inner_loop": {
+    "fact": "fused_destination 的最内层循环 .LBB0_7 有 74 条指令，每次只产出 1 个输出字节。",
+    "static_instruction_count": 74,
+    "breakdown": {
+      "fixed_point_division_smulh_asr_lsr": 5,
+      "clamp_lower_bound_bic": 4,
+      "conditional_select_csel": 9,
+      "conditional_compare_ccmp": 4,
+      "compare_cmp": 9,
+      "source_pixel_loads_ldrb": 4,
+      "multiply_accumulate_mul_madd_msub": 10,
+      "address_and_arithmetic_add_sub": 24,
+      "shift_or_lsl_orr": 4,
+      "output_store_strb": 1
+    },
+    "note": "静态 76 条与 PMU 实测 82.4 条/字节吻合，差值来自外层循环摊销。",
+    "breakdown_note": "互斥分类，合计等于 74。"
+  },
+  "finding_2_coordinates_recomputed_per_byte": {
+    "ir_fact": "融合后的 linalg.generic 是三维全 parallel（行/列/通道），整套源坐标与权重计算写在最内层 region 里，对每个 (行,列,通道) 都执行一次。",
+    "ir_evidence": "02-transformed.mlir 中 arith.floordivsi / maxsi / minsi 各出现两组（x 与 y 方向），位于 linalg.index 之后的同一 region。",
+    "redundancy": {
+      "x_direction": "每行的 x 坐标序列相同，只需 640 次，实际执行 1228800 次（1920 倍）",
+      "y_direction": "每行只需一次，实际执行 1228800 次（1920 倍）",
+      "channel_dim": "坐标与通道无关，同一像素的 3 个字节重复计算 3 遍"
+    },
+    "coord_share_of_inner_loop": 0.419,
+    "estimated_ceiling_if_hoisted": {
+      "coord_related_instructions": 31,
+      "inner_loop_total": 74,
+      "instructions_per_byte": 47.9,
+      "still_slower_than_opencv_by": 4.13,
+      "caveat": "按互斥指令分类估算的上限，不是实测。即便完全提出循环外仍比 OpenCV 慢约 4.1 倍，所以坐标重算只解释了一部分差距。"
+    }
+  },
+  "finding_3_vector_loads_degenerate_to_per_lane": {
+    "fact": "tile_4x32_vector_packed_source 的 1536 条 ld1 全部是单字节插入通道形式（ld1 {v0.b}[i]），没有一条连续向量加载。",
+    "counts": {
+      "ld1_total": 1536,
+      "ld1_single_lane": 1536,
+      "ushll": 513,
+      "st1": 384,
+      "mla": 384,
+      "dup": 38,
+      "uzp1": 36
+    },
+    "why": "vector.gather 对每个源像素单独发一条加载再插入通道，凑满一个 128 位向量需要 16 条 ld1；OpenCV 一条 ld1 {v0.16b} 即可。SIMD 只用在乘加上（384 条 mla），加载侧完全没受益。",
+    "consequence": "这解释了为什么向量化生成了真实 SIMD 却追不上基线，也解释了 tile_4x32_vector 的指令数（83.4）甚至略高于未分块版（82.4）。"
+  },
+  "finding_4_opencv_is_neon_baseline": {
+    "fact": "板端 OpenCV 4.11.0 以 NEON 为 baseline 编译，另有 NEON_DOTPROD / NEON_FP16 / NEON_BF16 的运行时分发。",
+    "build_info": [
+      "Baseline: NEON FP16",
+      "Dispatched code generation: NEON_DOTPROD NEON_FP16 NEON_BF16"
+    ],
+    "implication": "对比对象不是朴素标量实现，而是长期手工优化的向量化实现，一条 SIMD 指令处理 8-16 个字节。每字节 11.6 条指令是这个量级的结果。"
+  },
+  "conclusion": [
+    "7.1 倍差距至少有两个独立来源，不是单一原因。",
+    "来源一：坐标与权重在最内层按字节重算（占内层指令 41.9%），x/y 方向各冗余 1920 倍，通道维额外重复 3 倍。",
+    "来源二：向量化路径的加载退化为逐通道插入，SIMD 的加载带宽优势完全丧失。",
+    "参照系本身是 NEON 手工优化实现，不是朴素标量代码。",
+    "即便把坐标计算完全提出循环，估算仍慢约 4.13 倍 —— 要真正追上需要连续向量加载，而这被 vector.gather 的布局假设堵住了。"
+  ],
+  "what_would_be_needed": [
+    "让 resize 的源地址计算走 affine 可分析的形式，使坐标能被提到循环外，而不是留在 tensor.extract 的标量 region 里。",
+    "让向量化产生连续 ld1 而非 gather：需要按源行分块并显式处理行 stride，或改用 vector.transfer_read 加显式索引变换。",
+    "这两项都不是参数调优，是重新设计算子表达方式，工作量与收益需另行评估。"
+  ],
+  "limitations": [
+    "本文件是静态反汇编统计与 IR 结构分析，除 measured_baseline 外不含新的运行时测量。",
+    "提出循环外的收益是按指令分类估算的上限，未实现也未实测。",
+    "分支开销仍未量化（PMU 该事件不可用），见 mlir_pmu_attribution.json。",
+    "指令分类按助记符归类，个别指令可能同时服务多个用途，分类存在边界模糊。"
+  ]
+}
