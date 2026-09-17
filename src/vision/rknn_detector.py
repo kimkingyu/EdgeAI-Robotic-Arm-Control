@@ -111,8 +111,11 @@ class RKNNObjectDetector:
         return detections
 
     def _postprocess(self, outputs, orig_shape) -> List[Dict[str, Any]]:
-        # 预留后处理通道
-        return []
+        """解码检测头输出。布局异常时抛错，不返回空列表冒充"图里没东西"。"""
+        from src.vision.yolo_postprocess import decode
+        width, height = self.target_size
+        return decode(outputs, orig_shape, input_size=(height, width),
+                      conf_thresh=self.conf_thresh, nms_thresh=self.nms_thresh)
 
     def release(self):
         if self._preprocessor is not None:

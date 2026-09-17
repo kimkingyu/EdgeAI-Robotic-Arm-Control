@@ -136,6 +136,98 @@ class ExecutionSafetyTests(unittest.TestCase):
         self.assertGreater(heights[0], heights[1], "必须先到安全高度再下探")
 
 
+class Calibrated:
+    """假标定：像素按固定偏移映射到基座坐标，便于断言链路是否真的走通。"""
+
+    is_calibrated = True
+
+    @staticmethod
+    def pixel_to_robot(px, py):
+        return {"x": 100.0 + px * 0.1, "y": py * 0.1, "z": 30.0}
+
+
+def detection(name, score, center):
+    cx, cy = center
+    return {"class_id": 0, "class_name": name, "score": score,
+            "bbox": [cx - 10, cy - 10, cx + 10, cy + 10], "center": (cx, cy)}
+
+
+class TargetResolutionTests(unittest.TestCase):
+    """检测结果 → 像素 → 基座坐标，这条链路此前完全没接。"""
+
+    def test_picks_highest_score_without_name(self):
+        pipeline = build()
+        pipeline.hand_eye = Calibrated()
+        located = pipeline.resolve_target(
+            [detection("bowl", 0.4, (100, 200)), detection("vase", 0.9, (300, 400))])
+        self.assertEqual(located["detection"]["class_name"], "vase")
+        self.assertEqual(located["pixel"], (300, 400))
+        self.assertAlmostEqual(located["world"]["x"], 130.0, places=5)
+
+    def test_matches_by_name_case_insensitively(self):
+        pipeline = build()
+        pipeline.hand_eye = Calibrated()
+        items = [detection("bowl", 0.9, (100, 100)), detection("Vase", 0.5, (200, 200))]
+        self.assertEqual(
+            pipeline.resolve_target(items, "vase")["detection"]["class_name"], "Vase")
+
+    def test_no_match_returns_none(self):
+        pipeline = build()
+        pipeline.hand_eye = Calibrated()
+        self.assertIsNone(pipeline.resolve_target([detection("bowl", 0.9, (10, 10))], "阀芯"))
+
+    def test_empty_detections_returns_none(self):
+        pipeline = build()
+        pipeline.hand_eye = Calibrated()
+        self.assertIsNone(pipeline.resolve_target([], "vase"))
+
+    def test_uncalibrated_refuses_even_with_detection(self):
+        """有检测但未标定时必须拒绝，不能退回近似坐标。"""
+        pipeline = build()
+        self.assertIsNone(pipeline.resolve_target([detection("vase", 0.9, (300, 400))]))
+
+
+class DetectionToGraspTests(unittest.TestCase):
+    def test_pick_without_coords_uses_detection(self):
+        """VLM 只给 target_name 时，坐标由检测加标定补齐。"""
+        pipeline = build()
+        pipeline.hand_eye = Calibrated()
+        ok = pipeline.execute_plan(
+            {"intent": "抓取", "actions": [{"action": "pick", "params": {"target_name": "vase"}}]},
+            [detection("vase", 0.9, (300, 400))])
+        self.assertTrue(ok)
+        self.assertEqual(len(pipeline.controller.motions), 3)
+        self.assertEqual(pipeline.stats["actions_executed"], 1)
+        requested = pipeline.kinematics.requests[0]
+        self.assertAlmostEqual(requested["x"], 130.0, places=5)
+        self.assertAlmostEqual(requested["y"], 40.0, places=5)
+
+    def test_explicit_coords_take_precedence(self):
+        pipeline = build()
+        pipeline.hand_eye = Calibrated()
+        pipeline.execute_plan(
+            {"intent": "抓取", "actions": [
+                {"action": "pick", "params": {"x": 200, "y": 50, "z": 30, "target_name": "vase"}}]},
+            [detection("vase", 0.9, (300, 400))])
+        self.assertAlmostEqual(pipeline.kinematics.requests[0]["x"], 200.0, places=5)
+
+    def test_pick_without_coords_and_without_detection_refuses(self):
+        pipeline = build()
+        pipeline.hand_eye = Calibrated()
+        pipeline.execute_plan(
+            {"intent": "抓取", "actions": [{"action": "pick", "params": {"target_name": "vase"}}]}, [])
+        self.assertEqual(pipeline.controller.motions, [])
+
+    def test_place_does_not_fall_back_to_detection(self):
+        """放置目标位置不能由检测推断 —— 检测的是工件而非放置点。"""
+        pipeline = build()
+        pipeline.hand_eye = Calibrated()
+        pipeline.execute_plan(
+            {"intent": "放置", "actions": [{"action": "place", "params": {"target_name": "vase"}}]},
+            [detection("vase", 0.9, (300, 400))])
+        self.assertEqual(pipeline.controller.motions, [])
+
+
 class CoordinateSafetyTests(unittest.TestCase):
     """未标定时不得给出无依据的坐标 —— 这类缺陷会稳定抓偏且看起来在工作。"""
 
@@ -176,17 +268,10 @@ class CoordinateSafetyTests(unittest.TestCase):
                                  "非法坐标必须拒绝而不是转成默认值")
 
     def test_calibrated_pixel_to_world_uses_homography(self):
-        class Calibrated:
-            is_calibrated = True
-
-            @staticmethod
-            def pixel_to_robot(px, py):
-                return {"x": 111.0, "y": 22.0, "z": 3.0}
-
         pipeline = build()
         pipeline.hand_eye = Calibrated()
         self.assertEqual(pipeline.pixel_to_world(320, 240),
-                         {"x": 111.0, "y": 22.0, "z": 3.0})
+                         {"x": 132.0, "y": 24.0, "z": 30.0})
 
 
 if __name__ == "__main__":

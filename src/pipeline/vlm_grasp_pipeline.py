@@ -224,11 +224,26 @@ class VLMGraspPipeline:
             print(f"[YOLO] 预处理 {pre.last_timings['total_ns'] / 1e6:.1f} ms"
                   f"（{pre.backend_name}）")
             t0 = time.perf_counter()
-            self.detector.infer(batch)
+            outputs = self.detector.infer(batch)
             cost = (time.perf_counter() - t0) * 1000
             print(f"[YOLO] 推理耗时 {cost:.1f} ms")
+
+            if not outputs:
+                print("[YOLO] 推理未返回输出，无法解码")
+                return []
+            from src.vision.yolo_postprocess import decode
+            detections = decode(outputs, frame.shape, input_size=(640, 640),
+                                conf_thresh=self.config.get("vision", {}).get("conf_thresh", 0.25))
+            self.stats["last_detections"] = len(detections)
+            if not detections:
+                print("[YOLO] 未检出目标")
+            else:
+                print(f"[YOLO] 检出 {len(detections)} 个目标: "
+                      + ", ".join("%s(%.2f)@%s" % (d["class_name"], d["score"], d["center"])
+                                  for d in detections[:3]))
+            return detections
         except Exception as e:
-            print(f"[YOLO] 推理异常: {str(e)[:80]}")
+            print(f"[YOLO] 推理异常: {type(e).__name__}: {str(e)[:80]}")
         return []
 
     # ── 决策 ────────────────────────────────────────────────────────────
@@ -306,6 +321,35 @@ class VLMGraspPipeline:
             return None
         return self.hand_eye.pixel_to_robot(px, py)
 
+    def resolve_target(self, detections: List[Dict[str, Any]],
+                       target_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """按名称（或最高分）挑一个检测目标，并解算其基座坐标。
+
+        返回 None 的两种情况必须区分对待，调用方不应把它们当成同一件事：
+        没找到匹配目标，或找到了但未标定无法解算。日志会说明是哪一种。
+        """
+        if not detections:
+            return None
+        picked = None
+        if target_name:
+            needle = str(target_name).strip().lower()
+            matches = [d for d in detections if needle in d["class_name"].lower()]
+            if not matches:
+                print(f"[定位] 画面中没有匹配 \"{target_name}\" 的目标"
+                      f"（检出的是：{', '.join(d['class_name'] for d in detections[:5])}）")
+                return None
+            picked = max(matches, key=lambda d: d["score"])
+        else:
+            picked = max(detections, key=lambda d: d["score"])
+
+        px, py = picked["center"]
+        world = self.pixel_to_world(px, py)
+        if world is None:
+            print(f"[定位] 已锁定 {picked['class_name']}@({px},{py})，"
+                  f"但手眼标定未载入，拒绝解算物理坐标")
+            return None
+        return {"detection": picked, "pixel": (px, py), "world": world}
+
     @staticmethod
     def _finite_coordinate(params: Dict[str, Any], key: str) -> Optional[float]:
         """取一个必须存在的有限数值坐标；缺失或非法返回 None，不用默认值填充。"""
@@ -322,9 +366,11 @@ class VLMGraspPipeline:
 
     # ── 执行 ────────────────────────────────────────────────────────────
 
-    def execute_plan(self, plan: Dict[str, Any]) -> bool:
+    def execute_plan(self, plan: Dict[str, Any],
+                     detections: Optional[List[Dict[str, Any]]] = None) -> bool:
         actions = plan.get("actions", [])
         intent = plan.get("intent", "未知")
+        detections = detections or []
 
         if intent == "none" or not actions:
             print(f"[执行] 决策结果：无可执行动作（intent={intent}）")
@@ -354,6 +400,18 @@ class VLMGraspPipeline:
                 # 那等于朝一个无依据的固定点下探。
                 coords = {k: self._finite_coordinate(params, k) for k in ("x", "y", "z")}
                 missing = [k for k, v in coords.items() if v is None]
+                # VLM 通常只给语义不给坐标。此时用检测结果 + 手眼标定补齐，
+                # 这是"检测 → 像素 → 基座坐标"链路的实际接入点。
+                if missing and name == "pick":
+                    located = self.resolve_target(detections, params.get("target_name"))
+                    if located is not None:
+                        coords = dict(located["world"])
+                        missing = [k for k in ("x", "y", "z")
+                                   if self._finite_coordinate(coords, k) is None]
+                        if not missing:
+                            print(f"  → 由检测结果解算坐标: {located['detection']['class_name']}"
+                                  f"@{located['pixel']} → "
+                                  f"({coords['x']:.1f}, {coords['y']:.1f}, {coords['z']:.1f})")
                 if missing:
                     print(f"  ⚠ {name} 缺少或非法的坐标 {missing}，拒绝执行"
                           f"（不使用默认坐标，避免无依据下探）")
@@ -398,15 +456,17 @@ class VLMGraspPipeline:
         print("=" * 70)
 
         frame = self.capture()
+        detections: List[Dict[str, Any]] = []
         if frame is None:
             print("[感知] 无可用画面，仅按指令文本决策")
         else:
             h, w = frame.shape[:2]
             print(f"[感知] 取得画面 {w}x{h}")
-            self.locate_targets(frame)
+            detections = self.locate_targets(frame)
 
         plan = self.decide(frame, instruction)
-        return self.execute_plan(plan)
+        # 检测结果传给执行环节，供 VLM 未给坐标时解算
+        return self.execute_plan(plan, detections)
 
     def print_stats(self):
         s = self.stats
