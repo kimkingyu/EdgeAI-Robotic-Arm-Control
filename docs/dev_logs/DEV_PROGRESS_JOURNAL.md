@@ -1010,3 +1010,22 @@ pixel_to_world 此前定义了却从未被调用，locate_targets 返回值被�
 > 💡 **亮点提炼**：打通项目中长期断开的核心链路使检测结果首次真正驱动抓取坐标解算，在补齐回退路径时区分不同失败原因并拒绝为语义不符的动作提供错误回退。
 
 ---
+
+## 📍 第 54 步：把默认模型切换到FP16并修复配置未生效导致仍加载坏模型的问题
+* **记录时间**：`2026-09-17 21:05:03` ｜ **技术模块**：`[Config/Integration]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+grep 定位全部 5 处默认模型路径：configs/config.yaml、main.py、src/pipeline/vlm_grasp_pipeline.py、src/pipeline/task_runner.py、tools/run_vlm_grasp.py，逐处改为 yolov8n_fp16.rknn 并附根因文档链接注释。README 导出章节改为 FP16 命令在前、INT8 命令保留备查并标注产出不可用，同时新增验证模型是否可用小节，提示检出 0 个不等于图里没东西。用真实入口 tools/run_vlm_grasp.py --mock --no-vlm 实跑验证。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+改完 config.yaml 后实跑发现入口仍加载 int8，因为 run_vlm_grasp.py 有独立的 DEFAULT_CONFIG 不读 yaml，这正是项目路线图早先记录过的配置必须接入实际入口的问题。若只改 yaml 就收工，默认路径依然是坏模型。README 的导出命令若不改，照文档操作会再次产出分类失效的模型。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+首次实跑暴露两个问题：板端正式仓库缺 src/vision/preprocess.py 导致 ModuleNotFoundError 使 YOLO 路径异常退出；run_vlm_grasp.py 的 DEFAULT_CONFIG 仍指向 int8 使 config.yaml 修改无效。补齐依赖并修改入口后重跑：日志显示定位引擎就绪 yolov8n_fp16.rknn、预处理 5.4ms opencv、推理 107.2ms、检出 6 个目标 dog 0.90 at (211,328)、person 0.55 at (486,127)、person 0.48 at (470,136)。对比修改前同一入口返回空列表，全链路在真实入口上首次可用。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：发现配置修改未真正生效这一常见陷阱并定位到独立 DEFAULT_CONFIG 绕过配置文件，通过真实入口实跑验证而非仅确认文件内容已改，同时修正会导致他人重现缺陷的文档命令。
+
+---

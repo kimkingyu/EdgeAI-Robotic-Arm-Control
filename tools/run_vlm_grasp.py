@@ -26,7 +26,9 @@ DEFAULT_CONFIG = {
         "device_id": 0, "width": 640, "height": 480,
         "mock_image": "data/calibration/images/000000000074.jpg",
     },
-    "vision": {"model_path": "models/weights/yolov8n_int8.rknn"},
+    # FP16：INT8 的分类分支已被量化破坏（分数恒为 0，检测不可用），
+    # 根因见 docs/benchmarks/yolo_int8_classification_failure.json
+    "vision": {"model_path": "models/weights/yolov8n_fp16.rknn", "conf_thresh": 0.25},
     "vlm": {
         "model_path": "models/weights/qwen3vl4b_w8a8.rkllm",
         "vision_path": "models/weights/qwen3vl4b_vision.rknn",

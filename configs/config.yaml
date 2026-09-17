@@ -26,7 +26,9 @@ camera:
   fps: 30
 
 vision:
-  model_path: "models/weights/yolov8n_int8.rknn"
+  # FP16 而非 INT8：INT8 的分类分支已被量化破坏（分数恒为 0，检测不可用），
+  # 根因见 docs/benchmarks/yolo_int8_classification_failure.json
+  model_path: "models/weights/yolov8n_fp16.rknn"
   target_size: [640, 640]
   quant_method: "int8_kl"      # INT8 非对称量化 + KL 散度校准
   core_mask: "all"             # "all" (3核并发 6 TOPS) | "core0" | "auto"

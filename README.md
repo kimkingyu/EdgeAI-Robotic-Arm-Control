@@ -313,11 +313,27 @@ taskset -c 4-7 .venv-rknn/bin/python tools/benchmark_npu.py --rounds 300
 taskset -c 4-7 .venv-rknn/bin/python tools/benchmark_npu_parallel.py --rounds 150
 ```
 
-### 4. 视觉模型 INT8 量化导出
+### 4. 视觉模型导出
+
+**当前可用的是 FP16**（INT8 分类分支已被量化破坏，见上文更正）：
+```bash
+.venv-rknn/bin/python tools/export_rknn.py \
+    --onnx models/weights/yolov8n_op19.onnx \
+    --output models/weights/yolov8n_fp16.rknn --fp16
+```
+
+INT8 导出命令保留备查，但**产出的模型检测不可用**，`normal`/`mmse`/`kl_divergence`
+三种算法均如此：
 ```bash
 .venv-rknn/bin/python tools/export_rknn.py \
     --onnx models/weights/yolov8n_op19.onnx \
     --output models/weights/yolov8n_int8.rknn --algorithm normal
+```
+
+验证模型是否可用（不要只看能否加载）：
+```bash
+# 检出 0 个目标就是有问题，别当成"图里没东西"
+.venv-rknn/bin/python tools/test_yolo_postprocess.py    # 解码逻辑 19 项
 ```
 
 ### 5. 启用 MLIR 实验预处理后端（可选，实测更慢）
