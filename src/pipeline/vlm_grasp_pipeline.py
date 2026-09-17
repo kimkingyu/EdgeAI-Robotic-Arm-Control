@@ -295,25 +295,30 @@ class VLMGraspPipeline:
 
     # ── 坐标变换 ────────────────────────────────────────────────────────
 
-    def pixel_to_world(self, px: float, py: float) -> Dict[str, float]:
-        """
-        手眼标定：像素 (u,v) → 机械臂基座 (X,Y,Z)
+    def pixel_to_world(self, px: float, py: float) -> Optional[Dict[str, float]]:
+        """手眼标定：像素 (u,v) → 机械臂基座 (X,Y,Z)。未标定返回 None。
 
-        优先使用标定文件中的单应矩阵（含噪声下实测定位误差 0.64mm）；
-        若尚未标定，退化为线性近似——**仅供离线联调，不可用于实机抓取**。
+        这里不提供线性近似兜底。无标定依据的坐标会让机械臂稳定抓偏，而且因为
+        "看起来在工作"极难察觉 —— C++ 侧（src/main.cpp）已按同样理由改为拒绝
+        解算，Python 侧保持一致。
         """
-        if self.hand_eye is not None and self.hand_eye.is_calibrated:
-            r = self.hand_eye.pixel_to_robot(px, py)
-            if r is not None:
-                return r
+        if self.hand_eye is None or not self.hand_eye.is_calibrated:
+            return None
+        return self.hand_eye.pixel_to_robot(px, py)
 
-        he = self.config.get("hand_eye", {})
-        scale = he.get("mm_per_pixel", 0.5)
-        return {
-            "x": he.get("base_x", 150.0) + (py - he.get("center_v", 240)) * scale,
-            "y": (px - he.get("center_u", 320)) * scale,
-            "z": self.config.get("pipeline", {}).get("grasp_z_height", 30.0),
-        }
+    @staticmethod
+    def _finite_coordinate(params: Dict[str, Any], key: str) -> Optional[float]:
+        """取一个必须存在的有限数值坐标；缺失或非法返回 None，不用默认值填充。"""
+        if key not in params:
+            return None
+        value = params[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        value = float(value)
+        # NaN 与 inf 能通过 float() 但会让逆解产生无意义结果。
+        if value != value or value in (float("inf"), float("-inf")):
+            return None
+        return value
 
     # ── 执行 ────────────────────────────────────────────────────────────
 
@@ -345,9 +350,15 @@ class VLMGraspPipeline:
                     self.controller.move_joints(j, speed=30)
 
             elif name in ("pick", "place"):
-                x = float(params.get("x", 150.0))
-                y = float(params.get("y", 0.0))
-                z = float(params.get("z", 30.0))
+                # 坐标必须由调用方显式给全且合法。曾经缺一个就套默认 (150,0,30)，
+                # 那等于朝一个无依据的固定点下探。
+                coords = {k: self._finite_coordinate(params, k) for k in ("x", "y", "z")}
+                missing = [k for k, v in coords.items() if v is None]
+                if missing:
+                    print(f"  ⚠ {name} 缺少或非法的坐标 {missing}，拒绝执行"
+                          f"（不使用默认坐标，避免无依据下探）")
+                    continue
+                x, y, z = coords["x"], coords["y"], coords["z"]
                 approach = self.kinematics.inverse_kinematics({"x": x, "y": y, "z": safe_z})
                 target = self.kinematics.inverse_kinematics({"x": x, "y": y, "z": z})
                 if not (approach and target):
