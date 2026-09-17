@@ -458,5 +458,15 @@
     "why": "上一回合把网络不通直接判为外部硬阻塞就停了，但当时只试过 HTTPS 直连一条路径，没有穷尽可选通道。重试同一失败命令不产生新信息，应改为分层定位：先分离 DNS/TCP/认证三层，再找替代通道。用 -c 传参而非 git config --global 是为了不污染仓库与用户全局配置。",
     "evidence": "直连 git ls-remote 报 Recv failure: Connection was reset；DNS 解析正常；ssh.github.com:443 握手成功仅拒绝公钥；两把本地密钥均 Permission denied；板端 curl 不通；127.0.0.1:7890 代理 curl 返回 HTTP 200 耗时 0.594s。经代理 ls-remote 读到远端 6984653 与上次推送一致、无他人新提交，推送结果 6984653..fa80cb9。校验远端 refs/heads/main 为 fa80cb91c97cdebb303a6ff24855364d707c8790，与本地 git rev-parse main 完全一致，git status -sb 显示 main...origin/main 无分歧。",
     "value": "面对网络阻塞用分层排查替代无效重试，通过区分 TCP 握手成功与认证失败快速排除 SSH 通道、发现并验证本地代理作为可用路径，且以单次命令参数而非全局配置完成推送，避免留下隐式环境依赖。"
+  },
+  {
+    "step": "47",
+    "timestamp": "2026-09-17 14:07:05",
+    "title": "同步README与路线图的MLIR模块状态，标注批次差异并修正引错的数字",
+    "module": "Docs/Release",
+    "how": "核查发现 README 与 PROJECT_ROADMAP 完全未提及 MLIR 模块（grep 零命中），一个新增 6 万行、含 52 个内核的模块在项目门面上不存在。README 新增第 5 节核心技术与 Benchmark 第 3 节，均以结论先行方式写明未取得加速；补 compiler/ 与 scripts/mlir/ 到模块结构树，补快速上手第 5 节说明按 profile 指定库的用法。路线图新增阶段 5（5.1-5.6 已完成、5.7 原因定位未做），并在架构图中把原先隐含的预处理环节显式标出。",
+    "why": "文档是项目门面，隐去一个结论为负的完整模块等于选择性呈现。且必须写清它是实验模块而非已生效优化，否则读者会误以为项目已用上自研编译器。核对时发现 README 引用的 destination_only 数字来自另一批次，以及 m4_summary 的 timing 与 README 满频表是不同批次（4.49x vs 4.38x），若不标注会让人以为其中一个是错的。",
+    "evidence": "README 全部 MLIR 数字逐项对照归档 JSON 校验通过：满频表 opencv 4359.2us、fused_destination 19103.1us(4.38x)、tile_4x32_vector 19012.1us(4.36x)、tile_4x32 28379.7us(6.51x)；A/B 表 yolo 9544.7/29050.9us 8张量全不一致最大差180.22、qwen 2096.5/9708.9us 32张量全不一致最大差5.07。修正 destination_only 由引错的 20927.2us/4.80x 改为归档实际的 21005.7us/4.82x。在 mlir_m4_summary.json 补 frequency_verified_rerun 字段记录带监控批次（1156次采样、0.087%低于满频、唯一低点为基准未开始时的第0点）并说明批次差异。文档引用的 15 个路径全部存在性校验通过。",
+    "value": "主动发现并填补项目门面对负面结果的缺失，坚持结论先行披露未达成的性能目标；核对时定位并修正跨批次引错的数字，并显式标注批次差异避免后续误判为数据错误。"
   }
 ]

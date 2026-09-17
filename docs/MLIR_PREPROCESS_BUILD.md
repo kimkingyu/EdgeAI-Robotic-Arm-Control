@@ -153,6 +153,8 @@ taskset -c 4 "$HOME/project/EdgeAI-Robotic-Arm-Control/.venv-rknn/bin/python" -B
 
 448×448 结论一致，最好也只到 3.81 倍慢。计划设定的至少改善 10% 的门槛没有达到，**默认后端仍是 OpenCV**。
 
+> 上表批次只有首尾 2 次 sysfs 采样。带 50ms 连续监控重跑后（1156 次采样、仅第 0 点基准未开始时为 2256 MHz），OpenCV 4359.2 us、最优 MLIR 19103.1 us，比值 **4.38×**。批次间波动不改变结论方向；README 的满频对比表用的是这批频率已验证的数字，见 `mlir_m4_summary.json` 的 `frequency_verified_rerun`。
+
 固定尺寸分块反而更慢；向量化确实生成了真实的 SIMD 指令（640 profile 下 211 个 q 寄存器引用、240 条 `ld1`/`st1`，对比融合版的 6 个），但仍未追上基线。
 
 ### 向量化的语义限制

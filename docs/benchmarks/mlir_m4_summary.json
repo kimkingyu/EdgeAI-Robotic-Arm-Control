@@ -179,5 +179,62 @@
     "Thermal snapshots are boundary readings, not continuous monitoring.",
     "Timing excludes decode and output allocation; it is preprocessing only.",
     "OpenCV differs from the Q11 reference within the frozen 1-level tolerance; MLIR kernels matched it exactly."
-  ]
+  ],
+  "frequency_verified_rerun": {
+    "why": "本文件的 timing 来自仅有首尾 2 次 sysfs 采样的批次，无法排除过程中降频。此处补一次带 50ms 连续监控的重跑，README 的满频对比表用的是这批数字。",
+    "monitor": {
+      "sample_count": 1156,
+      "frequency_khz_unique": [
+        2256000,
+        2400000
+      ],
+      "share_below_top_percent": 0.087,
+      "held_top_throughout": false
+    },
+    "note_on_single_low_sample": "唯一低于满频的采样是第 0 点（2256MHz，基准尚未开始），其后 1155 次全为 2400MHz。",
+    "opencv_p50_us": 4359.2,
+    "variants": {
+      "unfused": {
+        "p50_us": 23118.2,
+        "ratio": 5.303
+      },
+      "fused": {
+        "p50_us": 22325.7,
+        "ratio": 5.122
+      },
+      "destination_only": {
+        "p50_us": 21005.7,
+        "ratio": 4.819
+      },
+      "fused_destination": {
+        "p50_us": 19103.1,
+        "ratio": 4.382
+      },
+      "tile_1x16": {
+        "p50_us": 23737.4,
+        "ratio": 5.445
+      },
+      "tile_4x32": {
+        "p50_us": 28379.7,
+        "ratio": 6.51
+      },
+      "tile_8x64": {
+        "p50_us": 28512.1,
+        "ratio": 6.541
+      },
+      "tile_1x128": {
+        "p50_us": 23566.3,
+        "ratio": 5.406
+      },
+      "tile_1x16_vector_packed_source": {
+        "p50_us": 20153.7,
+        "ratio": 4.623
+      },
+      "tile_4x32_vector_packed_source": {
+        "p50_us": 19012.1,
+        "ratio": 4.361
+      }
+    },
+    "batch_difference": "与上方 timing 相比最优配置从 4.49x 变为 4.38x，属批次间波动，不改变结论方向。"
+  }
 }

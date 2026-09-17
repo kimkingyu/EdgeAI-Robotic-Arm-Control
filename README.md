@@ -96,6 +96,22 @@
   `--i2c` 与 `--drive` 同时显式指定。板端实测 3 秒解算 172 次、下发 0 次；
   舵机板未接线时降级为仅解算。**仍无实机抓取与定位精度数据**。
 
+### 5. MLIR 视觉预处理编译器（**实验模块，未取得加速**）
+
+> ⚠️ 结论先行：自建的 MLIR 编译器能正确生成并跑通板端算子，但**在两个生产
+> profile 上都慢于 OpenCV**（满频条件下 4.38 倍）。计划设定的"至少改善 10%"
+> 门槛未达成，因此 **OpenCV 保持默认后端**，MLIR 仅作显式可选实验后端。
+> 本节记录的是一次结论为负的完整优化尝试，不是已生效的性能优化。
+
+* **编译器本体**：固定 `llvmorg-20.1.8`（锁 SHA256），用 MLIR Builder 生成 IR 而非文本拼接；自写三个 Pass —— `edge-fuse-resize-color` 消除 resize 与换色间的整图中间张量、`edge-prepare-preprocess-destination` 做 destination-passing、`edge-tile/vectorize-preprocess` 做受限分块与向量化。AOT 产出不链接 libMLIR 的独立 `.so`，运行期不带编译器；
+* **正确性**：52 个内核全部通过逐字节比对（对独立 Q11 定点参考）、链接期 `malloc` 包装的分配审计与保护页检查；8 个因输出尺寸不大于分块尺寸标为不适用，不计入通过。融合＋目标复用版本实测**零分配**；
+* **发现向量化的语义缺陷**：上游对 `tensor.extract` 生成的 `vector.gather` 按紧凑布局算偏移、无视行 stride，带 5 字节行填充的输入最大误差达 249。没有改用无填充输入掩盖，而是让 Pass 默认拒绝该结果，须显式开关才生成；
+* **纠正自己的测量错误**：边界快照显示各阶段恒定 2.4GHz，但补上 50ms 连续采样后发现混合负载下 **69.8% 的采样低于满频** —— NPU 推理占 38ms、预处理仅 9.5ms，CPU 等待时被 `ondemand` 降频。OpenCV 与 MLIR 受影响程度不同（2.20x vs 1.52x），把比值从 4.38 **压缩**成 3.02。原先报的 3.0 倍是污染结果，已订正；
+* **±1 灰度级不等于等价**：MLIR 与 OpenCV 的预处理输出最大仅差 1 个灰度级，但真实 RKNN 原始输出并不相同（YOLOv8n 最大绝对差 180.2）。经对照实验确认 NPU 本身确定、且 MLIR 与参考逐字节一致（偏离参考的是 OpenCV 舍入），故判定不可做无缝默认替换；
+* **可复现**：全新目录重建，312 个 IR/汇编产物 SHA256 与原产物逐字节一致。
+
+详见 [编译与实测记录](docs/MLIR_PREPROCESS_BUILD.md)、[M4 消融汇总](docs/benchmarks/mlir_m4_summary.json)、[M5/M6 汇总](docs/benchmarks/mlir_m56_summary.json)。
+
 ---
 
 ## 📊 性能评测基准 (Benchmark)
@@ -161,18 +177,50 @@
 
 > 达成近线性加速的同时单路时延仅增 7%，可同时支撑 3 路工业相机；P99 抖动 ±0.65ms 满足伺服控制回路的确定性要求。
 
+### 3. MLIR 自建预处理算子 vs OpenCV（**结论为负**）
+
+> 单核（`taskset -c 4`）单线程，480×640 输入，50ms 连续采样确认全程满频 2.4GHz。
+> 每次计时调用都校验完整输出，空转或算错的内核无法显得更快。
+
+| 调度配置 | P50 | 相对 OpenCV |
+| :--- | ---: | ---: |
+| **OpenCV `INTER_LINEAR`（默认，最快）** | **4359.2 us** | **1.00x** |
+| MLIR 融合＋目标复用（最优 MLIR 配置） | 19103.1 us | 4.38x 慢 |
+| MLIR 分块 4×32＋向量化 | 19012.1 us | 4.36x 慢 |
+| MLIR 仅目标复用 | 21005.7 us | 4.82x 慢 |
+| MLIR 分块 4×32（无向量化） | 28379.7 us | 6.51x 慢 |
+
+固定尺寸分块反而更慢；向量化确实生成了真实 SIMD（211 个 q 寄存器引用、240 条 `ld1`/`st1`，对比融合版 6 个），但指令数从 164 涨到 4391，最终只追平融合版。**IR 层面变换成功不等于目标机器上有收益** —— 这是本模块最主要的结论。
+
+真实 RKNN 端到端 A/B（`librknnrt 2.3.2` + 真实权重，Mock 推理被显式拒绝）：
+
+| 模型 | OpenCV 预处理 | MLIR 预处理 | 模型原始输出 |
+| :--- | ---: | ---: | :--- |
+| YOLOv8n INT8 @ 640² | 9544.7 us | 29050.9 us | 8 张量全不一致，最大差 180.2 |
+| Qwen3-VL 视觉塔 @ 448² | 2096.5 us | 9708.9 us | 32 张量全不一致，最大差 5.07 |
+
+> 这两行的绝对值受降频影响（见上文第 5 节），**不可用作内核性能比较**，仅说明混合负载下的实际表现。内核相对性能以上表满频数据为准。
+
 ---
 
 ## 📂 项目模块结构
 
 ```text
 EdgeAI-Robotic-Arm-Control/
+├── compiler/                     # MLIR 预处理编译器（独立 CMake，不入主程序构建）
+│   ├── include/edgeai/           # Pass 声明与 pipeline 注册
+│   ├── lib/Transforms/           # 自写 Pass：融合 / destination-passing / 分块向量化
+│   ├── runtime/                  # 不依赖 LLVM 的稳定 C ABI 运行库
+│   ├── profiles/                 # yolo640 / qwen448 / 小尺寸测试规格
+│   ├── tests/                    # 正确性、分配审计、消融与频率监控
+│   └── toolchain.lock.json       # 固定 llvmorg-20.1.8 与 SHA256
 ├── configs/
 │   └── config.yaml               # 工业工况、大模型与机械臂统一配置文件
 ├── data/
 │   └── calibration/              # 量化校准集样本与指令集
 ├── docs/
 │   ├── PROJECT_ROADMAP.md        # 研发全景蓝图与阶段推进路线图 (Master Roadmap)
+│   ├── MLIR_PREPROCESS_BUILD.md  # MLIR 编译器构建与实测记录（含未达成加速的结论）
 │   ├── BOARD_SETUP_WALKTHROUGH.md# 香橙派板端环境配置与实战通关指南
 │   ├── PCA9685_WIRING_GUIDE.md   # PCA9685 40-Pin 极简硬件接线与引脚定义
 │   ├── SINGLE_SERVO_TEST_GUIDE.md# 单舵机免外接电源安全轻测指南
@@ -184,6 +232,7 @@ EdgeAI-Robotic-Arm-Control/
 ├── models/
 │   └── weights/                  # .rkllm (大模型) 与 .rknn (视觉) 量化模型
 ├── scripts/
+│   ├── mlir/                     # LLVM 固定版本拉取、构建与算子产物生成
 │   ├── check_board_env.sh        # RK3588 软硬件体检脚本
 │   ├── remote_deploy.py          # PC 端一键免密远程部署工具
 │   ├── set_performance.sh        # CPU/GPU/NPU/DDR 全线锁频性能模式脚本
@@ -194,13 +243,16 @@ EdgeAI-Robotic-Arm-Control/
 │   ├── kinematics/               # 正逆运动学几何解算器 (IK)
 │   ├── llm/                      # Qwen 工业指令微调模板与任务规划器 (Planner)
 │   ├── pipeline/                 # 大模型-视觉-控制全闭环任务调度主干
-│   └── vision/                   # V4L2 摄像头抓取与检测
+│   └── vision/                   # V4L2 摄像头抓取、检测与统一预处理后端
 ├── tools/
 │   ├── export_rkllm.py           # Qwen 大模型 W4A16 极限压缩转换脚本
 │   ├── export_rknn.py            # 视觉模型 INT8 KL 散度量化转换脚本
 │   ├── benchmark_quant.py        # 板端端到端性能 Benchmark 评测工具
 │   ├── benchmark_npu.py          # NPU 单路多核调度模式时延基准测试
-│   └── benchmark_npu_parallel.py # NPU 三核真并发吞吐上限测试
+│   ├── benchmark_npu_parallel.py # NPU 三核真并发吞吐上限测试
+│   ├── benchmark_preprocess.py   # OpenCV 预处理分段基线（resize/换色/包装分开计时）
+│   ├── benchmark_preprocess_rknn.py # 预处理后端的真实 RKNN A/B（拒绝 Mock 推理）
+│   └── test_mlir_preprocess.py   # 预处理契约、内存与后端选择测试
 ├── main.py                       # 工业控制台入口主程序
 └── requirements.txt
 ```
@@ -239,6 +291,20 @@ taskset -c 4-7 .venv-rknn/bin/python tools/benchmark_npu_parallel.py --rounds 15
     --onnx models/weights/yolov8n_op19.onnx \
     --output models/weights/yolov8n_int8.rknn --algorithm normal
 ```
+
+### 5. 启用 MLIR 实验预处理后端（可选，实测更慢）
+
+默认走 OpenCV，**不需要任何 MLIR 依赖**。要用实验后端得显式指定库路径；AOT 内核的输出尺寸是编译期固定的，一个 `.so` 只服务一个 profile，所以 640 和 448 各给一个：
+
+```bash
+python3 tools/run_vlm_grasp.py --cmd "..." --mock \
+  --preprocess-backend mlir \
+  --preprocess-library 640x640=<产物目录>/640x640/fused_destination/libedgeai_preprocess.so \
+  --preprocess-library 448x448=<产物目录>/448x448/fused_destination/libedgeai_preprocess.so \
+  --preprocess-manifest <产物目录>/manifest.json
+```
+
+缺库、架构不符、输入不受支持都会**直接报错**，不会静默退回 OpenCV —— 否则就会把 OpenCV 的耗时记在 MLIR 名下。编译器本身的构建步骤见 [MLIR_PREPROCESS_BUILD.md](docs/MLIR_PREPROCESS_BUILD.md)。
 
 ---
 
