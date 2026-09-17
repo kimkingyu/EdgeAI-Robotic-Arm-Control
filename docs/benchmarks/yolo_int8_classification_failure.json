@@ -36,7 +36,7 @@
   },
   "measured_alternatives": [
     {
-      "variant": "INT8 normal（当前在用）",
+      "variant": "INT8 normal（原默认，已停用）",
       "size_mb": 4.7,
       "score_max": 0.0,
       "detections_above_0_25": 0,
@@ -94,5 +94,24 @@
     "共享量化参数这一机制是由数值证据与 RKNN 行为反推，未直接读取 rknn 内部量化参数表。",
     "未测试 YOLOv11n INT8 是否有同样问题（结构相同，预计一致，但未实测）。",
     "速度对比为单实例单次测量，非持续吞吐；未做连续频率监控。"
-  ]
+  ],
+  "resolution": {
+    "decision": "默认模型切换到 FP16",
+    "changed_paths": [
+      "configs/config.yaml",
+      "main.py",
+      "tools/run_vlm_grasp.py",
+      "src/pipeline/vlm_grasp_pipeline.py",
+      "src/pipeline/task_runner.py"
+    ],
+    "pitfall": "仅改 config.yaml 无效：tools/run_vlm_grasp.py 有独立 DEFAULT_CONFIG 不读 yaml，实跑才发现入口仍加载 INT8。",
+    "verified_by": "真实入口 tools/run_vlm_grasp.py --mock --no-vlm 实跑检出 6 个目标（dog 0.90、person 0.55/0.48）",
+    "cost": "FP16 单实例 10.1 FPS，比 INT8 慢 2.3 倍；FP16 并发池吞吐未实测",
+    "not_done": [
+      "拆分输出头以取回 INT8 速度",
+      "逐层混合精度可行性未验证",
+      "YOLOv11n INT8 预计同样失效但未实测",
+      "mAP 量化精度损失需标注数据集，未测"
+    ]
+  }
 }
