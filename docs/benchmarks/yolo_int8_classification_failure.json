@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "severity": "blocking",
+  "title": "yolov8n_int8.rknn 的分类分支在 INT8 量化后恒为 0，检测不可用",
+  "how_found": "实现后处理解码后用真实模型跑 6 张真实校准图，检出 0 个目标。验证脚本带 assert total>0，空结果没有被当成\"图里没东西\"放过。",
+  "symptom": {
+    "coordinate_rows": "正常，min=5.15 max=648.79，是 640 尺度下的像素值",
+    "classification_rows": "全部 80 行恒为 0.0000，任何阈值下都检不出目标",
+    "consequence": "模型能算出框的位置，但永远不知道框里是什么。"
+  },
+  "ruled_out": {
+    "decoder_bug": "同一份解码代码在 FP16 模型上得到 0.7998/20 个目标，与 ONNX 原模型的 0.7996/20 个吻合，解码逻辑正确。",
+    "input_scale": "试过 uint8 0~255、float32 0~1、float32 0~255。运行时只接受 uint8（float32 报 input size 4915200 > 1228800），uint8 下仍全零。",
+    "quantization_algorithm": "normal / mmse / kl_divergence 三种算法全部全零，不是算法选择问题。",
+    "calibration_set": "100 张图清单完整，文件缺失 0 个。"
+  },
+  "root_cause": {
+    "mechanism": "YOLOv8 的输出头把坐标与类别分数拼接成同一个 84 通道张量输出。坐标范围 0~640，分数范围 0~1，共享同一组量化参数时，scale 由坐标的动态范围决定。",
+    "arithmetic": {
+      "classification_only_scale": 0.003641,
+      "classification_only_note": "单独量化时 0.80 对应量化值 219.72，可正常表示。",
+      "shared_scale_with_coordinates": 2.5098,
+      "shared_scale_note": "一个量化步长 2.51 已大于分数的最大值 0.93，所有分数必然被压成 0。这是数学上的必然结果，不是精度损失。"
+    },
+    "activation_distribution": {
+      "samples": 13440000,
+      "source": "校准集前 20 张图的 ONNX 分类分支输出",
+      "max": 0.92845,
+      "mean": 3.4e-05,
+      "std": 0.003544,
+      "percentile_99": 4.1e-05,
+      "percentile_99_99": 0.048012,
+      "share_above_0_25_percent": 0.003564,
+      "note": "极端稀疏：99% 的激活值低于 0.000041，只有 0.0036% 超过 0.25。"
+    }
+  },
+  "measured_alternatives": [
+    {
+      "variant": "INT8 normal（当前在用）",
+      "size_mb": 4.7,
+      "score_max": 0.0,
+      "detections_above_0_25": 0,
+      "p50_ms": 43.66,
+      "fps": 22.9,
+      "usable": false
+    },
+    {
+      "variant": "INT8 mmse",
+      "size_mb": 4.7,
+      "score_max": 0.0,
+      "detections_above_0_25": 0,
+      "usable": false
+    },
+    {
+      "variant": "INT8 kl_divergence",
+      "size_mb": 4.7,
+      "score_max": 0.0,
+      "detections_above_0_25": 0,
+      "usable": false
+    },
+    {
+      "variant": "FP16",
+      "size_mb": 7.9,
+      "score_max": 0.7998,
+      "detections_above_0_25": 20,
+      "p50_ms": 99.24,
+      "fps": 10.1,
+      "usable": true
+    }
+  ],
+  "speed_note": "FP16 比 INT8 慢 2.3 倍（10.1 vs 22.9 FPS，单实例 taskset -c 4-7）。但 INT8 的速度是在输出全零的前提下取得的，不可用的速度不构成性能优势。README 中的 112 FPS 是三核并发池数字，与此处单实例不可直接比较。",
+  "fix_options": [
+    {
+      "option": "改用 FP16",
+      "pros": "立即可用，无需改导出流程",
+      "cons": "慢 2.3 倍、体积 7.9MB",
+      "status": "已验证可行"
+    },
+    {
+      "option": "拆分输出头，让坐标与分数分两个输出张量",
+      "pros": "各自独立量化，可保留 INT8 速度",
+      "cons": "需改 ONNX 导出（截断到 sigmoid 之前）并同步改后处理解码",
+      "status": "未实施"
+    },
+    {
+      "option": "对输出层指定混合精度，让分类分支保持 FP16",
+      "pros": "兼顾速度与可用性",
+      "cons": "需确认 rknn-toolkit2 2.3.2 的逐层精度配置支持程度",
+      "status": "未验证"
+    }
+  ],
+  "limitations": [
+    "激活值分布只统计了校准集前 20 张图（1344 万个值），未覆盖全部 100 张。",
+    "共享量化参数这一机制是由数值证据与 RKNN 行为反推，未直接读取 rknn 内部量化参数表。",
+    "未测试 YOLOv11n INT8 是否有同样问题（结构相同，预计一致，但未实测）。",
+    "速度对比为单实例单次测量，非持续吞吐；未做连续频率监控。"
+  ]
+}
