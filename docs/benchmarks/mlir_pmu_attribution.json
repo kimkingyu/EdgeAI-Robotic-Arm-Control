@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "stage": "M4 后续：性能归因",
+  "status": "measured",
+  "question": "MLIR 预处理慢于 OpenCV 的主要来源是访存还是指令执行",
+  "answer": "指令执行。MLIR 每输出字节需要的指令数是 OpenCV 的 7.1 倍，而它的 IPC 更高、后端停顿占比更低、L1D 缺失率更低 —— 执行效率不差，是工作量本身多得多。",
+  "tooling": {
+    "why_not_perf": "板端未安装 perf，且 apt 安装需要交互式 sudo 密码。改为用 perf_event_open 直接读 ARMv8 PMU，paranoid=2 下允许测自身进程，不需要 root 也不依赖 perf 工具。",
+    "source": "compiler/tests/pmu_counters.c",
+    "driver": "compiler/tests/profile_preprocess.py",
+    "counter_multiplexing": "首轮一次打开 12 个事件，缩放比只有 0.38-0.45（6 个硬件槽位被复用），branch_instructions 甚至读不到。改为分 4 组依次打开后缩放比全部为 1.0，本汇总只采用缩放比 1.0 的那批数据。"
+  },
+  "measurements": {
+    "opencv": {
+      "wall_p50_us": 3602.3,
+      "instructions": 14240085,
+      "cycles": 7976177,
+      "instructions_per_output_byte": 11.5886,
+      "cycles_per_output_byte": 6.491,
+      "ipc": 1.7853,
+      "backend_stall_share": 0.4108,
+      "frontend_stall_share": 0.0228,
+      "l1d_read_miss_rate": 0.0052,
+      "ll_read_miss_rate": 0.443,
+      "l1i_refill_rate": 0.0007
+    },
+    "fused_destination": {
+      "wall_p50_us": 19235.4,
+      "instructions": 101225966,
+      "cycles": 43468225,
+      "instructions_per_output_byte": 82.3779,
+      "cycles_per_output_byte": 35.3745,
+      "ipc": 2.3287,
+      "backend_stall_share": 0.2001,
+      "frontend_stall_share": 0.003,
+      "l1d_read_miss_rate": 0.0042,
+      "ll_read_miss_rate": 0.7137,
+      "l1i_refill_rate": 0.0001
+    },
+    "tile_4x32_vector_packed_source": {
+      "wall_p50_us": 19582.7,
+      "instructions": 102529926,
+      "cycles": 44248149,
+      "instructions_per_output_byte": 83.4391,
+      "cycles_per_output_byte": 36.0092,
+      "ipc": 2.3172,
+      "backend_stall_share": 0.1641,
+      "frontend_stall_share": 0.1445,
+      "l1d_read_miss_rate": 0.0025,
+      "ll_read_miss_rate": 0.669,
+      "l1i_refill_rate": 0.2365
+    }
+  },
+  "ratios_vs_opencv": {
+    "fused_destination": {
+      "cycles_x": 5.45,
+      "instructions_x": 7.109,
+      "cache_misses_x": 1.632,
+      "ll_read_misses_x": 1.292,
+      "stalled_cycles_backend_x": 2.655,
+      "stalled_cycles_frontend_x": 0.709,
+      "wall_x": 5.34
+    },
+    "tile_4x32_vector_packed_source": {
+      "cycles_x": 5.548,
+      "instructions_x": 7.2,
+      "cache_misses_x": 3.589,
+      "ll_read_misses_x": 2.467,
+      "stalled_cycles_backend_x": 2.216,
+      "stalled_cycles_frontend_x": 35.167,
+      "wall_x": 5.436
+    }
+  },
+  "evidence_against_memory_bound": [
+    "MLIR 的 IPC 2.33 高于 OpenCV 的 1.79：若受访存阻塞，IPC 应更低。",
+    "MLIR 后端停顿占比 0.20，低于 OpenCV 的 0.41。",
+    "MLIR 的 L1D 读缺失率 0.0042 低于 OpenCV 的 0.0052。",
+    "LL 读缺失次数仅为 1.29 倍，远小于周期数的 5.45 倍差距。",
+    "L1I 重填率 0.0001-0.0007，取指不是瓶颈。"
+  ],
+  "unavailable_events": {
+    "branch_instructions": "PERF_COUNT_HW_BRANCH_INSTRUCTIONS 在本内核上 perf_event_open 失败。",
+    "armv8_br_immed_retired": "原始事件 0x0D 打开成功但恒读 0，说明该 PMU 未实现此事件；因此分支开销既未被量化也不能声称已排除。"
+  },
+  "interpretation": [
+    "融合与目标复用已经消掉整图中间张量，剩下的差距在标量计算本身的指令量。",
+    "OpenCV 的 INTER_LINEAR 是长期手工优化的 NEON 实现，每字节 11.6 条指令；自建内核每字节 82.4 条，差距来自代码生成质量而非调度策略。",
+    "这解释了为什么分块与向量化都没能翻盘：它们改的是访存局部性与并行度，而瓶颈在指令总量。tile_4x32_vector 的指令数甚至略高于未分块版本。"
+  ],
+  "limitations": [
+    "单核（taskset -c 4）单线程，单一 profile 640x640、输入 480x640。",
+    "计数为 30 次重复的中位数，exclude_kernel=1 只含用户态。",
+    "分支开销未能量化（事件不可用），不能排除其贡献。",
+    "本归因说明差距来自指令量，但未定位到具体哪些 IR 结构产生了多余指令；那需要逐段反汇编对照，属未做的工作。"
+  ]
+}
