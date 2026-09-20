@@ -1048,3 +1048,22 @@ grep 定位全部 5 处默认模型路径：configs/config.yaml、main.py、src/
 > 💡 **亮点提炼**：主动在三处文档就地更正而非另起新章，避免准确的速度数据掩盖功能不可用这一事实；识别出原计划中需要硬件才能验证精度这一错误假设并记录成因，减少同类疏漏重复。
 
 ---
+
+## 📍 第 56 步：拆分YOLO输出头恢复INT8分类分支，默认模型回到可用的23.6FPS
+* **记录时间**：`2026-09-20 21:42:24` ｜ **技术模块**：`[Vision/Quantization/Optimization]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+新增 tools/split_yolo_output.py，从真实 yolov8n_op19.onnx 暴露 /model.22/Mul_2_output_0 [1,4,8400] 坐标与 /model.22/Sigmoid_output_0 [1,80,8400] 分类两个 graph outputs，shape inference/checker 校验。用板端 rknn-toolkit2 2.3.2 导出 /tmp/yolov8n_split_int8.rknn，再复制为正式 models/weights/yolov8n_split_int8.rknn。扩展 src/vision/yolo_postprocess.py 兼容单输出与双输出、支持两种输出顺序并拒绝错误类别维/anchor 数。默认配置五处改为拆分头 INT8；README、PROJECT_ROADMAP、NPU报告和根因JSON同步处置结论。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+原始 INT8 全零的根因是坐标与分类分数共享量化范围，不是 normal/mmse/kl 算法选择。拆分输出让两组张量独立量化，是恢复 INT8 速度且保留分类可用性的最小结构性修复。FP16 虽可用但慢2.3倍，不能因为它可用就停止优化。原始坏模型不覆盖、不删除，保留作对照。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+双输出 ONNX 真实图验证通过：两个输出 [1,4,8400] 与 [1,80,8400]。拆分 INT8 真实输出：2个张量，坐标 min=5.149 max=648.792，分类 score max=0.743953；6张真实校准图检出12个目标，broccoli/giraffe/vase/zebra等均有非零分数。单实例 taskset -c 4-7、20 warmup+100轮：原坏INT8 P50 43.69ms/P99 51.18ms/22.9FPS/score_max 0；拆分INT8 42.40ms/49.50ms/23.6FPS/score_max 0.743953；FP16 99.14ms/104.96ms/10.1FPS/0.7998。三核并发池6次请求全部返回双输出形状且分数非零，单请求耗时63.11-92.46ms。默认真实入口 tools/run_vlm_grasp.py --mock --no-vlm 实跑加载 yolov8n_split_int8.rknn，预处理5.4ms，推理51.1ms，检出6个目标。测试全过：split exporter 2项、postprocess 22项、pipeline 23项。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：用输出契约重构而不是继续盲试量化算法，恢复了INT8的实际检测功能和23.6FPS速度；同时验证拆分输出不破坏双输出后处理、默认入口或三核并发池，完成一次可量化的边缘推理性能修复。
+
+---

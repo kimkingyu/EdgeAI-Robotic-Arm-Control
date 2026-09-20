@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "status": "measured",
+  "title": "YOLOv8 拆分输出头 INT8 优化验证",
+  "date": "2026-09-20",
+  "problem": "原始 YOLOv8 [1,84,8400] 将坐标与分类分数共享量化范围，INT8 分类分支恒为 0。",
+  "solution": {
+    "tool": "tools/split_yolo_output.py",
+    "source_onnx": "models/weights/yolov8n_op19.onnx",
+    "outputs": [
+      {
+        "name": "/model.22/Mul_2_output_0",
+        "shape": [1, 4, 8400],
+        "role": "coordinates"
+      },
+      {
+        "name": "/model.22/Sigmoid_output_0",
+        "shape": [1, 80, 8400],
+        "role": "class_scores"
+      }
+    ],
+    "rknn_model": "models/weights/yolov8n_split_int8.rknn",
+    "rknn_sha256": "4a1826cb8f03a585cb84a073334483b13a541b48d104df939f5f9aee6245a3cb",
+    "rknn_size_mb": 4.7
+  },
+  "single_instance_ab": {
+    "warmup": 20,
+    "iterations": 100,
+    "affinity": "taskset -c 4-7",
+    "input": [640, 640, 3],
+    "original_int8_broken": {
+      "outputs": 1,
+      "p50_ms": 43.69,
+      "p99_ms": 51.18,
+      "fps": 22.9,
+      "score_max": 0.0,
+      "usable": false
+    },
+    "split_int8": {
+      "outputs": 2,
+      "output_shapes": [[1, 4, 8400], [1, 80, 8400]],
+      "p50_ms": 42.4,
+      "p99_ms": 49.5,
+      "fps": 23.6,
+      "score_max": 0.743953,
+      "usable": true
+    },
+    "fp16": {
+      "outputs": 1,
+      "p50_ms": 99.14,
+      "p99_ms": 104.96,
+      "fps": 10.1,
+      "score_max": 0.7998,
+      "usable": true
+    }
+  },
+  "real_image_validation": {
+    "image_count": 6,
+    "split_int8_total_detections": 12,
+    "fp16_total_detections": 11,
+    "examples": [
+      {"image": "000000000009.jpg", "split_int8": ["broccoli 0.74", "bowl 0.64", "apple 0.36"]},
+      {"image": "000000000025.jpg", "split_int8": ["giraffe 0.78"]},
+      {"image": "000000000030.jpg", "split_int8": ["vase 0.92"]},
+      {"image": "000000000034.jpg", "split_int8": ["zebra 0.88"]}
+    ],
+    "note": "检测数量差异不是精度结论；这里只验证输出不再恒零且类别/框可解码。"
+  },
+  "pool_validation": {
+    "cores": 3,
+    "requests": 6,
+    "output_shapes": [[1, 4, 8400], [1, 80, 8400]],
+    "per_request_cost_ms_range": [63.11, 92.46],
+    "classification_score_max_positive": true,
+    "status": "passed"
+  },
+  "decision": {
+    "default_candidate": "yolov8n_split_int8.rknn",
+    "reason": "恢复分类输出，同时保留约 23.6 FPS 单实例，明显优于 FP16 的 10.1 FPS。",
+    "safety": "原始 yolov8n_int8.rknn 不覆盖、不删除，继续标记为不可用历史产物。",
+    "not_claimed": [
+      "尚未做 mAP 或标注精度评估。",
+      "尚未做完整三核并发吞吐基准，只验证了三核池可加载双输出并返回有效分数。",
+      "尚未验证 YOLOv11n 是否有同样的共享输出量化问题。"
+    ]
+  }
+}

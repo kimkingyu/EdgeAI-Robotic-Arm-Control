@@ -63,7 +63,7 @@
 
 ### 2. INT4/INT8 极限压缩与非对称量化校准 (PTQ & Calibration)
 * **大模型量化（规划中，尚未实测）**：目标采用 `rkllm-toolkit` 对 Qwen2.5 实施 W4A16 混合量化。当前受阻于该工具链仅提供 `linux_x86_64` wheel，无 aarch64 版本，详见 [部署约束调研](docs/QWEN_DEPLOYMENT_BLOCKER.md)；
-* **视觉骨干 INT8 量化**：构建 100 张真实场景校准集，采用逐通道非对称 INT8 训练后量化（PTQ），YOLOv8n 体积由 12.2MB 压至 **4.73MB（缩减 61.2%）**，权重内存仅 3.6MB；攻克 `opset 超限`、`校准集路径二次拼接`、`动态形状无法量化` 三处工程硬伤。
+* **视觉骨干量化**：构建 100 张真实场景校准集。原始 YOLOv8n 的共享输出 INT8 量化虽把体积压至 **4.73MB（缩减 61.2%）**，但分类分支恒为 0，已停用；现改为**拆分输出头 INT8**（坐标 `[1,4,8400]`、分类 `[1,80,8400]` 分开量化），模型仍约 4.7MB，真实输出恢复，单实例 P50 **42.4ms / 23.6 FPS**。
 
 ### 3. RK3588 3核 NPU 异构并发调度与系统级调优
 * **证伪常见误解**：实测发现单实例即便绑定 `NPU_CORE_0_1_2` 也只有 1.03x 加速 —— 因 `RKNNLite.inference()` 是同步阻塞调用，`core_mask` 仅声明"允许用哪些核"，并不会把单个任务拆分并行；
@@ -146,13 +146,15 @@
 > 📊 完整数据与分析：**[NPU 推理加速实测报告](docs/benchmarks/NPU_BENCHMARK_REPORT.md)**  
 > 🔧 想自己跑一遍：**[NPU 量化与加速复现指南](docs/NPU_REPRODUCTION_GUIDE.md)**（从裸板到 112 FPS，全程板端，无需 x86 PC）
 
-> ⚠️ **重要更正（实现后处理解码后发现）**：下表的压缩率与 NPU 直通率数据本身准确，
-> 但 **INT8 模型的分类分支在量化后恒为 0，检测实际不可用** —— 坐标算得出来，却永远
-> 不知道框里是什么。之前未发现是因为后处理一直是空的（`return []`），从没人看过输出内容。
-> 根因是 YOLOv8 输出头把坐标（0~640）与分数（0~1）拼在同一张量，共享量化参数时
-> scale≈2.51 已大于分数最大值 0.93，分数必然归零；`normal`/`mmse`/`kl_divergence`
-> 三种算法全部如此。FP16 正常（0.7998，与 ONNX 的 0.7996 吻合）但慢 2.3 倍。
+> ⚠️ **重要更正（2026-09-17 发现，2026-09-20 修复）**：原始单输出 INT8 模型的
+> 分类分支在量化后恒为 0，检测实际不可用 —— 坐标算得出来，却永远不知道框里是什么。
+> 根因是坐标（0~640）与分数（0~1）拼在同一张量，共享 scale≈2.51，分数必然归零；
+> `normal`/`mmse`/`kl_divergence` 三种算法全部如此。后处理实现后才发现这个问题，
 > 详见 [根因分析](docs/benchmarks/yolo_int8_classification_failure.json)。
+>
+> **当前默认已改为拆分输出头 INT8**：坐标 `[1,4,8400]` 与分类 `[1,80,8400]` 分开量化，
+> 真实输出恢复（score max 0.744），6 张真实图片检出 12 个目标，单实例 P50 42.4ms / 23.6 FPS。
+> FP16 仍保留作对照（P50 99.1ms / 10.1 FPS）。
 
 **① 模型量化压缩效果**
 
@@ -186,6 +188,16 @@
 | **生产封装 `RKNNParallelVisionPool`** | **112.99 FPS** | 26.26 ms | **2.93x** |
 
 > 达成近线性加速的同时单路时延仅增 7%，可同时支撑 3 路工业相机；P99 抖动 ±0.65ms 满足伺服控制回路的确定性要求。
+
+**当前可用视觉模型的实测**（单实例，`taskset -c 4-7`，100 轮）：
+
+| 模型 | 输出 | P50 | P99 | FPS | 分类输出 |
+| :--- | :--- | ---: | ---: | ---: | :--- |
+| 原始 INT8（已停用） | 1 个 `[1,84,8400]` | 43.69 ms | 51.18 ms | 22.9 | 全零 |
+| **拆分头 INT8（默认）** | 2 个 `[1,4,8400]` + `[1,80,8400]` | **42.40 ms** | **49.50 ms** | **23.6** | **可用** |
+| FP16（对照） | 1 个 `[1,84,8400]` | 99.14 ms | 104.96 ms | 10.1 | 可用 |
+
+拆分头 INT8 用同一套后处理兼容双输出，三核并发池已验证可加载并返回有效分数；完整证据见 [拆分头报告](docs/benchmarks/yolo_split_int8_report.json)。
 
 ### 3. MLIR 自建预处理算子 vs OpenCV（**结论为负**）
 
@@ -315,15 +327,25 @@ taskset -c 4-7 .venv-rknn/bin/python tools/benchmark_npu_parallel.py --rounds 15
 
 ### 4. 视觉模型导出
 
-**当前可用的是 FP16**（INT8 分类分支已被量化破坏，见上文更正）：
+**当前默认是拆分头 INT8**：先拆分坐标与分类输出，再分别量化；原始单输出 INT8 不可用。
+```bash
+.venv-rknn/bin/python tools/split_yolo_output.py \
+    --input models/weights/yolov8n_op19.onnx \
+    --output /tmp/yolov8n_split.onnx
+.venv-rknn/bin/python tools/export_rknn.py \
+    --onnx /tmp/yolov8n_split.onnx \
+    --output models/weights/yolov8n_split_int8.rknn --algorithm normal
+```
+
+FP16 保留作可靠对照：
 ```bash
 .venv-rknn/bin/python tools/export_rknn.py \
     --onnx models/weights/yolov8n_op19.onnx \
     --output models/weights/yolov8n_fp16.rknn --fp16
 ```
 
-INT8 导出命令保留备查，但**产出的模型检测不可用**，`normal`/`mmse`/`kl_divergence`
-三种算法均如此：
+原始单输出 INT8 命令保留备查，但 `normal`/`mmse`/`kl_divergence` 三种算法的分类分支均会归零，
+不要把它设为默认：
 ```bash
 .venv-rknn/bin/python tools/export_rknn.py \
     --onnx models/weights/yolov8n_op19.onnx \
@@ -332,8 +354,10 @@ INT8 导出命令保留备查，但**产出的模型检测不可用**，`normal`
 
 验证模型是否可用（不要只看能否加载）：
 ```bash
-# 检出 0 个目标就是有问题，别当成"图里没东西"
-.venv-rknn/bin/python tools/test_yolo_postprocess.py    # 解码逻辑 19 项
+# 解码边界测试
+.venv-rknn/bin/python tools/test_yolo_postprocess.py
+# 真实模型与真实图片验证：应检出非零目标
+.venv-rknn/bin/python verify_yolo_decode.py
 ```
 
 ### 5. 启用 MLIR 实验预处理后端（可选，实测更慢）

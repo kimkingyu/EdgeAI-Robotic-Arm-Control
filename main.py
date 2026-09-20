@@ -21,9 +21,8 @@ def load_config(config_path: str):
     if not p.exists() or not HAS_YAML:
         return {
             "camera": {"device_id": 0, "width": 640, "height": 480},
-            # FP16：INT8 分类分支已被量化破坏，详见
-            # docs/benchmarks/yolo_int8_classification_failure.json
-            "vision": {"model_path": "models/weights/yolov8n_fp16.rknn"},
+            # 拆分头 INT8：坐标与分类分数分离量化，已恢复分类输出。
+            "vision": {"model_path": "models/weights/yolov8n_split_int8.rknn"},
             "arm": {"controller_type": "i2c", "i2c": {"bus": 7, "address": 0x40, "channels": [0,1,2,3,4,5], "gripper_channel": 6}},
             "llm": {"enabled": True, "model_path": "models/weights/qwen2.5_0.5b_w4a16.rkllm"},
             "pipeline": {"safe_z_height": 150.0, "grasp_z_height": 30.0}

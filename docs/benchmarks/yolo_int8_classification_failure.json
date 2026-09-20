@@ -66,9 +66,20 @@
       "p50_ms": 99.24,
       "fps": 10.1,
       "usable": true
+    },
+    {
+      "variant": "拆分头 INT8",
+      "size_mb": 4.7,
+      "score_max": 0.743953,
+      "detections_above_0_25": 20,
+      "p50_ms": 42.4,
+      "p99_ms": 49.5,
+      "fps": 23.6,
+      "output_shapes": [[1, 4, 8400], [1, 80, 8400]],
+      "usable": true
     }
   ],
-  "speed_note": "FP16 比 INT8 慢 2.3 倍（10.1 vs 22.9 FPS，单实例 taskset -c 4-7）。但 INT8 的速度是在输出全零的前提下取得的，不可用的速度不构成性能优势。README 中的 112 FPS 是三核并发池数字，与此处单实例不可直接比较。",
+  "speed_note": "拆分头 INT8 单实例 P50 42.4ms/23.6FPS，分类输出恢复；FP16 为 99.24ms/10.1FPS。原始 INT8 的 22.9FPS 是全零输出，不可用。README 中的 112 FPS 是旧三核并发池数字，与此处单实例不可直接比较。", 
   "fix_options": [
     {
       "option": "改用 FP16",
@@ -79,8 +90,8 @@
     {
       "option": "拆分输出头，让坐标与分数分两个输出张量",
       "pros": "各自独立量化，可保留 INT8 速度",
-      "cons": "需改 ONNX 导出（截断到 sigmoid 之前）并同步改后处理解码",
-      "status": "未实施"
+      "cons": "需改 ONNX 导出并同步改后处理解码",
+      "status": "已验证可行，当前默认方案"
     },
     {
       "option": "对输出层指定混合精度，让分类分支保持 FP16",
@@ -96,22 +107,24 @@
     "速度对比为单实例单次测量，非持续吞吐；未做连续频率监控。"
   ],
   "resolution": {
-    "decision": "默认模型切换到 FP16",
+    "decision": "默认模型切换到拆分头 INT8",
     "changed_paths": [
       "configs/config.yaml",
       "main.py",
       "tools/run_vlm_grasp.py",
       "src/pipeline/vlm_grasp_pipeline.py",
-      "src/pipeline/task_runner.py"
+      "src/pipeline/task_runner.py",
+      "src/vision/yolo_postprocess.py",
+      "tools/split_yolo_output.py"
     ],
-    "pitfall": "仅改 config.yaml 无效：tools/run_vlm_grasp.py 有独立 DEFAULT_CONFIG 不读 yaml，实跑才发现入口仍加载 INT8。",
-    "verified_by": "真实入口 tools/run_vlm_grasp.py --mock --no-vlm 实跑检出 6 个目标（dog 0.90、person 0.55/0.48）",
-    "cost": "FP16 单实例 10.1 FPS，比 INT8 慢 2.3 倍；FP16 并发池吞吐未实测",
+    "pitfall": "仅改 config.yaml 无效：tools/run_vlm_grasp.py 有独立 DEFAULT_CONFIG 不读 yaml；切换前用真实入口验证，避免默认路径仍加载坏模型。",
+    "verified_by": "拆分头 INT8 输出 [1,4,8400]+[1,80,8400]，score_max=0.743953；6 张真实图片检出 12 个目标；三核并发池 6 次请求均返回双输出且分数非零。",
+    "cost": "拆分头 INT8 单实例 P50 42.4ms/23.6FPS；FP16 对照 99.14ms/10.1FPS。",
     "not_done": [
-      "拆分输出头以取回 INT8 速度",
       "逐层混合精度可行性未验证",
       "YOLOv11n INT8 预计同样失效但未实测",
-      "mAP 量化精度损失需标注数据集，未测"
+      "mAP 量化精度损失需标注数据集，未测",
+      "拆分头 INT8 三核并发池吞吐尚未做完整基准"
     ]
   }
 }

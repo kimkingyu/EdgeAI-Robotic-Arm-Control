@@ -37,26 +37,54 @@ class PostprocessError(ValueError):
     """输出张量不符合预期布局时抛出，不静默返回空列表。"""
 
 
+def _as_matrix(tensor, role: str) -> "np.ndarray":
+    """规范化一个输出为 (attributes, anchors)。"""
+    tensor = np.asarray(tensor)
+    if tensor.ndim == 3:
+        if tensor.shape[0] != 1:
+            raise PostprocessError("%s 暂不支持 batch>1，收到 %s" % (role, tensor.shape))
+        tensor = tensor[0]
+    if tensor.ndim != 2:
+        raise PostprocessError("%s 期望二维输出，收到 %s" % (role, tensor.shape))
+    if tensor.shape[0] > tensor.shape[1]:
+        tensor = tensor.T
+    return tensor
+
+
 def _as_prediction(outputs) -> "np.ndarray":
-    """取出并规范化为 (num_attrs, num_anchors)。布局不符直接报错。"""
+    """取出单输出并规范化为 (num_attrs, num_anchors)。"""
     if not HAS_NUMPY:
         raise PostprocessError("后处理需要 numpy")
     if outputs is None:
         raise PostprocessError("模型输出为 None")
-    tensor = outputs[0] if isinstance(outputs, (list, tuple)) else outputs
-    tensor = np.asarray(tensor)
-    if tensor.ndim == 3:
-        if tensor.shape[0] != 1:
-            raise PostprocessError("暂不支持 batch>1，收到 %s" % (tensor.shape,))
-        tensor = tensor[0]
-    if tensor.ndim != 2:
-        raise PostprocessError("期望二维预测矩阵，收到 %s" % (tensor.shape,))
-    # 兼容 (8400, 84) 的转置布局：属性维一定远小于 anchor 维。
-    if tensor.shape[0] > tensor.shape[1]:
-        tensor = tensor.T
+    if isinstance(outputs, (list, tuple)):
+        if len(outputs) != 1:
+            raise PostprocessError("单输出布局收到 %d 个输出；双输出应为 4+80 属性张量" % len(outputs))
+        tensor = outputs[0]
+    else:
+        tensor = outputs
+    tensor = _as_matrix(tensor, "prediction")
     if tensor.shape[0] < 5:
         raise PostprocessError("属性维过小（%d），不是检测头输出" % tensor.shape[0])
     return tensor
+
+
+def _as_prediction_parts(outputs):
+    """返回 (坐标[4,N], 分数[C,N])，兼容单输出与拆分双输出。"""
+    if isinstance(outputs, (list, tuple)) and len(outputs) == 2:
+        parts = [_as_matrix(item, "split_output_%d" % index)
+                 for index, item in enumerate(outputs)]
+        coords = next((item for item in parts if item.shape[0] == 4), None)
+        scores = next((item for item in parts if item.shape[0] > 4), None)
+        if coords is None or scores is None or scores.shape[0] < 2:
+            raise PostprocessError("双输出必须包含 [4,N] 坐标与 [C,N] 分类分数，收到 %s"
+                                   % [item.shape for item in parts])
+        if coords.shape[1] != scores.shape[1]:
+            raise PostprocessError("坐标与分数 anchor 数不一致：%s vs %s"
+                                   % (coords.shape, scores.shape))
+        return coords, scores
+    prediction = _as_prediction(outputs)
+    return prediction[:4], prediction[4:]
 
 
 def nms(boxes: "np.ndarray", scores: "np.ndarray", threshold: float) -> List[int]:
@@ -98,18 +126,20 @@ def decode(outputs,
     input_size : 网络输入的 (h, w)。当前预处理是直接 resize，没有 letterbox，
                  所以 x/y 方向各自独立缩放；若将来改用 letterbox，这里必须同步改。
     """
-    prediction = _as_prediction(outputs)
-    num_attrs = prediction.shape[0]
+    coords, scores_all = _as_prediction_parts(outputs)
+    num_classes = scores_all.shape[0]
     names = tuple(class_names) if class_names is not None else COCO_CLASSES
-    num_classes = num_attrs - 4
+    if isinstance(outputs, (list, tuple)) and len(outputs) == 2 and \
+            class_names is None and num_classes != len(COCO_CLASSES):
+        raise PostprocessError("默认双输出 YOLOv8 类别维应为 %d，收到 %d；请显式提供 class_names"
+                               % (len(COCO_CLASSES), num_classes))
     if num_classes < 1:
         raise PostprocessError("类别维为 %d，输出布局异常" % num_classes)
     if len(names) < num_classes:
         # 类别表短于实际输出时补占位名，而不是越界取值。
         names = tuple(names) + tuple("class_%d" % i for i in range(len(names), num_classes))
 
-    boxes_cxcywh = prediction[:4].T
-    scores_all = prediction[4:4 + num_classes]
+    boxes_cxcywh = coords.T
     class_ids = scores_all.argmax(axis=0)
     scores = scores_all.max(axis=0)
 

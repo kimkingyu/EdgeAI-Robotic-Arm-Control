@@ -46,6 +46,26 @@ class LayoutTests(unittest.TestCase):
         tensor = make_output([(320, 320, 100, 100)], [(0, 0.9)])[0]
         self.assertEqual(len(decode(tensor, (640, 640))), 1)
 
+    def test_accepts_split_coordinate_and_score_outputs_in_either_order(self):
+        combined = make_output([(320, 320, 100, 100)], [(0, 0.9)])[0]
+        coords = combined[:4]
+        scores = combined[4:]
+        expected = decode(combined, (640, 640))
+        self.assertEqual(decode([coords, scores], (640, 640)), expected)
+        self.assertEqual(decode([scores, coords], (640, 640)), expected)
+
+    def test_rejects_invalid_split_output_contract(self):
+        coords = np.zeros((1, 4, 8400), dtype=np.float32)
+        wrong = np.zeros((1, 79, 8400), dtype=np.float32)
+        with self.assertRaises(PostprocessError):
+            decode([coords, wrong], (640, 640))
+
+    def test_rejects_split_anchor_mismatch(self):
+        coords = np.zeros((1, 4, 8400), dtype=np.float32)
+        scores = np.zeros((1, 80, 8399), dtype=np.float32)
+        with self.assertRaises(PostprocessError):
+            decode([coords, scores], (640, 640))
+
     def test_rejects_malformed_instead_of_returning_empty(self):
         """布局不对必须报错。静默返回空列表会被当成图里没东西。"""
         cases = {

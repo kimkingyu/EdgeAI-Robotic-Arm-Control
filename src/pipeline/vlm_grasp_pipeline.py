@@ -114,9 +114,8 @@ class VLMGraspPipeline:
 
     def _setup_detector(self) -> bool:
         vis_cfg = self.config.get("vision", {})
-        # 默认 FP16：INT8 分类分支已被量化破坏，见
-        # docs/benchmarks/yolo_int8_classification_failure.json
-        path = vis_cfg.get("model_path", "models/weights/yolov8n_fp16.rknn")
+        # 默认拆分头 INT8：坐标与分类分数分离量化，已恢复分类输出。
+        path = vis_cfg.get("model_path", "models/weights/yolov8n_split_int8.rknn")
         if not os.path.exists(path):
             print(f"[YOLO] 模型不存在 {path} → 跳过精确定位")
             return True

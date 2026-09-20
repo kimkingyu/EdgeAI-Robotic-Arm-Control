@@ -25,9 +25,8 @@ class GraspPipeline:
 
         vis_cfg = config.get("vision", {})
         self.detector = RKNNObjectDetector(
-            # 默认 FP16：INT8 分类分支已被量化破坏，见
-            # docs/benchmarks/yolo_int8_classification_failure.json
-            model_path=vis_cfg.get("model_path", "models/weights/yolov8n_fp16.rknn")
+            # 默认拆分头 INT8：坐标与分类分数分离量化，已恢复分类输出。
+            model_path=vis_cfg.get("model_path", "models/weights/yolov8n_split_int8.rknn")
         )
 
         # 2. 机械臂驱动
