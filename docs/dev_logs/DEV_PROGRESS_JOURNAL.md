@@ -1637,3 +1637,22 @@ fetch后HEAD...origin/main为0/0；GitHub默认main，认证成功；相关源�
 > 💡 **亮点提炼**：将暂存区作为发布前最终质量边界，对纯格式修复证明AST语义等价，避免修改已冻结实验事实。
 
 ---
+
+## 📍 第 87 步：GitHub 功能发布完成并核验远端提交
+* **记录时间**：`2026-10-11 20:41:15` ｜ **技术模块**：`[Git/Delivery]`
+
+### 1. 怎么做的（How - 技术实现与具体操作）
+以新提交8126d7d发布54份源码、测试、配置、项目追踪器和开发日志，执行git push origin main（不强推、不修改既有提交）；用gh api repos/kimkingyu/EdgeAI-Robotic-Arm-Control/git/ref/heads/main核对远端SHA；将本发布回执另作日志提交同步，排除所有模型、数据和build产物。
+
+### 2. 是为了什么（Why - 决策依据与解决痛点）
+将已验证的分类优化与C++ RKNN视觉成果送达用户公共仓库，并通过远端API而非仅凭本地提示确认实际发布成功。
+
+### 3. 验证证据（Evidence - 实测结果与日志支撑）
+```text
+git push显示3e347e3..8126d7d main->main；本地与GitHub main均为8126d7d54897c3f64d1558afd01d885c1e55eab3；首次功能推送后git status为main...origin/main且无工作区改动；54 files、17405 insertions、216 deletions。模型、数据集、build临时报告和计划文件未上传，FP16继续暂停。
+```
+
+### 4. 简历与课题价值（Value - 面试问答与技术亮点映射）
+> 💡 **亮点提炼**：完成可审计、非破坏性的GitHub发布，明确代码发布与硬件性能验收边界，保留实验失败和未验证项。
+
+---
