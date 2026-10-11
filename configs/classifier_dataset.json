@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "dataset": "Oxford-IIIT Pet Dataset",
+  "homepage": "https://www.robots.ox.ac.uk/~vgg/data/pets/",
+  "authors": ["Omkar M Parkhi", "Andrea Vedaldi", "Andrew Zisserman", "C. V. Jawahar"],
+  "license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "license_notes": "The official homepage permits commercial and research use. Image copyright remains with the original owners; this dataset license does not transfer their ownership or imply additional clearance of third-party rights.",
+  "task_usage": "Local research only. Do not commit, upload or publicly redistribute original images.",
+  "archive_checksums": {
+    "images": {
+      "url": "https://www.robots.ox.ac.uk/~vgg/data/pets/data/images.tar.gz",
+      "md5": "5c4f3ee8e5d25df40f4fd59a7f44e54c",
+      "md5_reference": "Installed torchvision 0.29.0+cpu, torchvision.datasets.OxfordIIITPet._RESOURCES; not an official published SHA256."
+    },
+    "annotations": {
+      "url": "https://www.robots.ox.ac.uk/~vgg/data/pets/data/annotations.tar.gz",
+      "md5": "95a8c909bbe2e81eed6a22bccdf3f68f",
+      "md5_reference": "Installed torchvision 0.29.0+cpu, torchvision.datasets.OxfordIIITPet._RESOURCES; not an official published SHA256."
+    }
+  },
+  "mirror": {
+    "dataset_id": "timm/oxford-iiit-pet",
+    "revision": "089695c834a7deb60505b7cc506672db1c31a6aa",
+    "license": "cc-by-sa-4.0",
+    "publisher_url": "https://www.robots.ox.ac.uk/~vgg/data/pets/",
+    "sha256_reference": "Hugging Face LFS object SHA256 at the frozen dataset revision, verified by the calling agent; not Oxford tar checksums.",
+    "batch_size": 32,
+    "files": {
+      "train": {"sha256": "b9ff432b33c77f4b50014684f25686a1cd523090686571743a6b7a257af27422", "size_bytes": 377611203, "row_count": 3680},
+      "test": {"sha256": "0997d4744ee6740e96f17f56b40b97c70076a4e4dad565bc63d0ffd03906f754", "size_bytes": 412654113, "row_count": 3669}
+    },
+    "ground_truth_basis": "Oxford breed annotations carried by the mirror's label/image_id/label_cat_dog columns and frozen card label_names; no direct reading of official annotation text or official tar archives is claimed."
+  },
+  "seed": 20261001,
+  "counts": {"calibration": 256, "development": 128, "holdout": 1000},
+  "weights_version": "IMAGENET1K_V1",
+  "mapping_policy": "Manually approved, frozen 20 dog-breed aliases to the zero-based ImageNet-1K V1 canonical category table. Never extend by model predictions, fuzzy matching, or nearby breed names.",
+  "classes": [
+    {"prefix": "basset_hound", "class_id": 4, "species": 2, "breed_id": 3, "canonical_name": "basset", "imagenet_index": 161, "alias": "Basset hound is the breed named basset in the V1 category table; manually frozen synonym."},
+    {"prefix": "beagle", "class_id": 5, "species": 2, "breed_id": 4, "canonical_name": "beagle", "imagenet_index": 162, "alias": "Exact breed name; underscores/capitalization are not a model-derived mapping."},
+    {"prefix": "boxer", "class_id": 9, "species": 2, "breed_id": 5, "canonical_name": "boxer", "imagenet_index": 242, "alias": "Exact breed name; manually frozen category index."},
+    {"prefix": "chihuahua", "class_id": 11, "species": 2, "breed_id": 6, "canonical_name": "Chihuahua", "imagenet_index": 151, "alias": "Exact breed, with canonical V1 capitalization Chihuahua."},
+    {"prefix": "english_setter", "class_id": 14, "species": 2, "breed_id": 8, "canonical_name": "English setter", "imagenet_index": 212, "alias": "Exact breed after replacing filename underscores with spaces."},
+    {"prefix": "german_shorthaired", "class_id": 15, "species": 2, "breed_id": 9, "canonical_name": "German short-haired pointer", "imagenet_index": 210, "alias": "Oxford's german_shorthaired denotes the German short-haired pointer; manually approved expanded breed name, not fuzzy matching."},
+    {"prefix": "great_pyrenees", "class_id": 16, "species": 2, "breed_id": 10, "canonical_name": "Great Pyrenees", "imagenet_index": 257, "alias": "Exact breed after replacing underscores and using canonical capitalization."},
+    {"prefix": "japanese_chin", "class_id": 18, "species": 2, "breed_id": 12, "canonical_name": "Japanese spaniel", "imagenet_index": 152, "alias": "Japanese Chin and Japanese spaniel name the same breed; manually frozen synonym."},
+    {"prefix": "keeshond", "class_id": 19, "species": 2, "breed_id": 13, "canonical_name": "keeshond", "imagenet_index": 261, "alias": "Exact breed name; manually frozen category index."},
+    {"prefix": "leonberger", "class_id": 20, "species": 2, "breed_id": 14, "canonical_name": "Leonberg", "imagenet_index": 255, "alias": "Leonberger is the breed named Leonberg in the V1 category table; manually frozen synonym."},
+    {"prefix": "miniature_pinscher", "class_id": 22, "species": 2, "breed_id": 15, "canonical_name": "miniature pinscher", "imagenet_index": 237, "alias": "Exact breed after replacing filename underscores with spaces."},
+    {"prefix": "newfoundland", "class_id": 23, "species": 2, "breed_id": 16, "canonical_name": "Newfoundland", "imagenet_index": 256, "alias": "Exact breed, with canonical V1 capitalization Newfoundland."},
+    {"prefix": "pomeranian", "class_id": 25, "species": 2, "breed_id": 17, "canonical_name": "Pomeranian", "imagenet_index": 259, "alias": "Exact breed, with canonical V1 capitalization Pomeranian."},
+    {"prefix": "pug", "class_id": 26, "species": 2, "breed_id": 18, "canonical_name": "pug", "imagenet_index": 254, "alias": "Exact breed name; manually frozen category index."},
+    {"prefix": "saint_bernard", "class_id": 29, "species": 2, "breed_id": 19, "canonical_name": "Saint Bernard", "imagenet_index": 247, "alias": "Exact breed after replacing underscores and using canonical capitalization."},
+    {"prefix": "samoyed", "class_id": 30, "species": 2, "breed_id": 20, "canonical_name": "Samoyed", "imagenet_index": 258, "alias": "Exact breed, with canonical V1 capitalization Samoyed."},
+    {"prefix": "scottish_terrier", "class_id": 31, "species": 2, "breed_id": 21, "canonical_name": "Scotch terrier", "imagenet_index": 199, "alias": "Scottish terrier and Scotch terrier name the same breed; manually frozen synonym."},
+    {"prefix": "staffordshire_bull_terrier", "class_id": 35, "species": 2, "breed_id": 23, "canonical_name": "Staffordshire bullterrier", "imagenet_index": 179, "alias": "Exact Staffordshire Bull Terrier breed with canonical joined bullterrier spelling; not American Staffordshire terrier."},
+    {"prefix": "wheaten_terrier", "class_id": 36, "species": 2, "breed_id": 24, "canonical_name": "soft-coated wheaten terrier", "imagenet_index": 202, "alias": "Oxford's wheaten_terrier denotes the soft-coated wheaten terrier; manually approved full breed name."},
+    {"prefix": "yorkshire_terrier", "class_id": 37, "species": 2, "breed_id": 25, "canonical_name": "Yorkshire terrier", "imagenet_index": 187, "alias": "Exact breed after replacing underscores and using canonical capitalization."}
+  ],
+  "limitations": [
+    "The prepared data cover 20 manually mapped dog breeds, not the complete 37-class Oxford dataset or full ImageNet-1K validation set.",
+    "Official breed annotations are ground truth; no model prediction is used as a label or selection filter.",
+    "The source trainval split supplies calibration/development; the source test split supplies final holdout only.",
+    "JPEG-byte SHA256, source identity and EXIF-normalized decoded RGB pixel SHA256 checks do not guarantee absence of near duplicates.",
+    "Official source split separation does not prove the pretrained ImageNet models have never seen these images or related images.",
+    "Calibration labels are null; breed metadata are for stratification, not post-calibration accuracy claims."
+  ]
+}

@@ -10,6 +10,7 @@ MLIR 后端不会在失败时悄悄退回 OpenCV —— 缺库、架构不符、
 import ctypes as C
 import hashlib
 import json
+import math
 import platform
 import time
 from pathlib import Path
@@ -250,12 +251,18 @@ class Preprocessor:
     实例，输出缓冲各自持有，直到 RKNN 消费完才可复用。
     """
 
-    def __init__(self, output_size=(640, 640), backend="opencv", library=None, manifest=None):
+    def __init__(self, output_size=(640, 640), backend="opencv", library=None, manifest=None,
+                 geometry="resize"):
         _require_numpy()
         height, width = (int(v) for v in output_size)
         if height < 1 or width < 1 or height > MAX_DIMENSION or width > MAX_DIMENSION:
             raise ValueError("非法输出尺寸: " + str(output_size))
+        if geometry not in ("resize", "letterbox"):
+            raise ValueError("未知几何模式 %r，可选 resize / letterbox" % (geometry,))
+        if backend == "mlir" and geometry == "letterbox":
+            raise UnsupportedInput("MLIR 后端不支持 letterbox；请显式选择 opencv")
         self.output_size = (height, width)
+        self.geometry = geometry
         if backend == "opencv":
             self.backend = OpenCVBackend(self.output_size)
         elif backend == "mlir":
@@ -266,7 +273,8 @@ class Preprocessor:
         self.last_timings = {}
 
     def describe(self):
-        info = {"backend": self.backend_name, "output_size": list(self.output_size)}
+        info = {"backend": self.backend_name, "output_size": list(self.output_size),
+                "geometry": self.geometry}
         info.update(self.backend.details)
         return info
 
@@ -274,8 +282,42 @@ class Preprocessor:
         """新建一块调用方独占的输出缓冲。"""
         return np.empty((self.output_size[0], self.output_size[1], 3), dtype=np.uint8)
 
+    def _transform(self, source):
+        """尺寸 API 为 (h,w)；变换字段始终显式区分 width/height。"""
+        source_height, source_width, _, _ = check_source(source)
+        target_height, target_width = self.output_size
+        resized_height, resized_width = target_height, target_width
+        pad_left = pad_top = 0
+        if self.geometry == "letterbox":
+            scale = min(target_width / source_width, target_height / source_height)
+            # 正数 half-up，不能用 Python round 的 ties-to-even。
+            resized_width = math.floor(source_width * scale + 0.5)
+            resized_height = math.floor(source_height * scale + 0.5)
+            if resized_width < 1 or resized_height < 1:
+                raise UnsupportedInput("letterbox 舍入后尺寸为空")
+            pad_left = (target_width - resized_width) // 2
+            pad_top = (target_height - resized_height) // 2
+        return {
+            "mode": self.geometry,
+            "source_width": source_width, "source_height": source_height,
+            "target_width": target_width, "target_height": target_height,
+            "resized_width": resized_width, "resized_height": resized_height,
+            "pad_left": pad_left, "pad_top": pad_top,
+            "scale_x": resized_width / source_width,
+            "scale_y": resized_height / source_height,
+        }
+
     def run(self, source, out=None):
-        """返回 RGB HWC uint8。out 为 None 时新分配；分配与内核耗时分列。"""
+        """返回 RGB HWC uint8；默认直接 resize，不归一化。"""
+        return self._run_with_transform(source, out)[0]
+
+    def run_with_transform(self, frame):
+        """返回 (RGB uint8 HWC, transform)，与像素来自同一次预处理。"""
+        return self._run_with_transform(frame)
+
+    def _run_with_transform(self, source, out=None):
+        """分配与内核耗时沿用旧统计，几何元数据不混进输出数组。"""
+        transform = self._transform(source)
         allocate_ns = 0
         if out is None:
             start = time.perf_counter_ns()
@@ -290,14 +332,23 @@ class Preprocessor:
             if not out.flags["C_CONTIGUOUS"] or not out.flags["WRITEABLE"]:
                 raise UnsupportedInput("输出缓冲必须连续且可写")
         start = time.perf_counter_ns()
-        self.backend.run(source, out)
+        if self.geometry == "letterbox":
+            resized = cv2.resize(source, (transform["resized_width"], transform["resized_height"]),
+                                 interpolation=cv2.INTER_LINEAR)
+            rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+            left, top = transform["pad_left"], transform["pad_top"]
+            out.fill(114)
+            out[top:top + transform["resized_height"],
+                left:left + transform["resized_width"]] = rgb
+        else:
+            self.backend.run(source, out)
         call_ns = time.perf_counter_ns() - start
         self.last_timings = {
             "backend": self.backend_name, "allocate_ns": allocate_ns, "call_ns": call_ns,
             "total_ns": allocate_ns + call_ns,
             "context_create_ns": getattr(self.backend, "last_context_create_ns", None),
         }
-        return out
+        return out, transform
 
     def run_batch1(self, source, out=None):
         """返回 [1,H,W,3]。连续输出上 expand_dims 是视图，不是整图拷贝。"""
@@ -324,6 +375,9 @@ def from_config(config, output_size):
     section = (config or {}).get("preprocess", {}) if hasattr(config, "get") else {}
     height, width = (int(v) for v in output_size)
     backend = section.get("backend", "opencv")
+    geometry = section.get("geometry", "resize")
+    if backend == "mlir" and geometry == "letterbox":
+        raise UnsupportedInput("MLIR 后端不支持 letterbox；请显式选择 opencv")
     library = section.get("library")
     manifest = section.get("manifest")
     libraries = section.get("libraries") or {}
@@ -337,4 +391,5 @@ def from_config(config, output_size):
     elif backend == "mlir" and libraries:
         raise BackendUnavailable("preprocess.libraries 中没有 profile %s 的库" % key)
     return Preprocessor(output_size=(height, width), backend=backend,
-                        library=library, manifest=manifest)
+                        library=library, manifest=manifest,
+                        geometry=geometry)

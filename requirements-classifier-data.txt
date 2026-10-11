@@ -1,0 +1,4 @@
+# Optional dataset acquisition only; install inside the project .venv.
+# Does not replace CPU inference dependencies or the board's RKNN environment.
+# Verified public CPython 3.12 Windows x86-64 wheel exists on PyPI.
+pyarrow==21.0.0

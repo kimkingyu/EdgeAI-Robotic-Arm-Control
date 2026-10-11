@@ -301,6 +301,139 @@ EdgeAI-Robotic-Arm-Control/
 
 ## ⚡ 快速上手
 
+### ResNet18 离线分类 demo（CPU，不控制机械臂）
+
+输入一张真实图片，输出 ImageNet Top-5、原始模型与 Conv-BN 融合对照、离线 HTML 和 JSON。这里是**真实 CPU 推理**，不连接摄像头、舵机或 NPU，也不使用 RKNN 的 Mock 延时。分类不提供目标框或抓取坐标。
+
+以下为 Windows / Git Bash 命令，使用项目独立环境（首次创建；已有 `.venv` 时先检查，不要覆盖）：
+
+```bash
+py -3.12 -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements-resnet.txt
+
+# 换成你自己的图片；只有显式允许才会下载缺失的官方权重
+.venv/Scripts/python.exe tools/run_resnet_demo.py \
+    --image path/to/image.jpg --download-weights --compare --benchmark
+
+# 导出静态 FP32 ONNX，并用同一张真实图片做 ONNX Runtime CPU 数值对照
+.venv/Scripts/python.exe tools/export_resnet_onnx.py --image path/to/image.jpg
+
+# 离线单元测试（不下载权重，不碰硬件）
+.venv/Scripts/python.exe tools/test_resnet_demo.py
+```
+
+- 直接打开 `build/resnet-demo/demo.html` 查看结果，`results.json` 保存逐轮计时、输入/权重哈希和环境信息。已有报告不会默认覆盖；重跑时换 `--output-dir`，或显式加 `--overwrite`。
+- 模型使用 `ResNet18_Weights.IMAGENET1K_V1` 的 RGB、短边 resize 256、中心裁剪 224、ImageNet mean/std；**不能套用 YOLO 的直接 resize 和归一化**。
+- 默认基准为每版本预热 10 次、每轮 50 次、3 轮交错测量，线程数为 1；可用 `--warmup`、`--iterations`、`--rounds`、`--threads` 调整。分类流水线从已解码 RGB 图像开始，不含下载、磁盘 I/O、模型加载或报告写入。单图重复基准不代表摄像头吞吐或数据集准确率。
+- Conv-BN 融合是现成优化，可能更快也可能更慢；报告保留实际结果和数值误差。少量图片的 Top-1 一致不等于 ImageNet 精度验证，CPU 数据也不代表 RK3588 NPU 性能。
+- ONNX 默认保存到 `models/weights/resnet18-fp32.onnx`，附带同名 JSON 元数据。输入已经是归一化 NCHW FP32，图中不重复归一化；尚未转换或验证 RKNN/INT8。
+
+### 多小模型优化对照（阶段 A，CPU-only）
+
+这里比较**同一个优化对不同模型的作用**，不是只比较模型大小。固定 `ResNet18`、`MobileNetV3-Small`、`ShuffleNetV2 ×1.0` 的官方 ImageNet-1K V1 权重，batch=1，不训练、不访问硬件。沿用上面的项目独立环境，不要安装进板端 RKNN 环境。
+
+| 组别 | 方案 | 对照对象 |
+|---|---|---|
+| B0 | PyTorch FP32 原始版 | 每模型自己的基线 |
+| F1 | Conv-BN 融合 | B0 |
+| L1 | channels_last 内存格式 | B0；逻辑形状仍为 NCHW |
+| FL1 | 融合 + channels_last | B0、F1、L1 |
+| O0 | 同一 ONNX，ORT 图优化关闭 | O1、B0 |
+| O1 | 同一 ONNX，ORT 图优化开启 | O0；不能把后端差异归因于文件格式 |
+
+三个模型共 18 个主配置，再给 B0/O1 增加 2/4 线程，共 **30 个唯一配置**。配置见 [configs/classifier_benchmark.json](configs/classifier_benchmark.json)。每个配置和重复块用独立进程；Windows 直接启动真实解释器，同时保留项目虚拟环境，校验实际 worker PID＋操作系统进程创建时间、代码/数据/权重哈希；退出后的 PID 可以被回收，不把裸 PID 绝对唯一当作独立性证据。
+
+```bash
+# 只读预检：不执行模型、不下载权重、不写报告
+.venv/Scripts/python.exe tools/run_classifier_benchmark.py \
+    --mode preflight --image data/resnet-demo/dog.jpg
+
+# 探索性真实运行：仅显式开关允许下载缺失的官方权重
+# 独立的流水线/RSS观测和profile不混入推理计时
+.venv/Scripts/python.exe tools/run_classifier_benchmark.py \
+    --mode smoke --image data/resnet-demo/dog.jpg --download-weights \
+    --warmup 5 --iterations 30 --repeats 2 --profile \
+    --output-dir build/classifier-benchmark/my-run
+
+# 只重新汇总已有结果，不重新推理；覆盖报告须显式允许
+.venv/Scripts/python.exe tools/summarize_classifier_benchmark.py \
+    --run-dir build/classifier-benchmark/my-run --overwrite
+
+# 新的离线测试与原有回归：不下载、不碰硬件
+.venv/Scripts/python.exe -m unittest \
+    tools.test_classification tools.test_classifier_benchmark \
+    tools.test_classifier_runner tools.test_resnet_demo tools.test_yolo_postprocess
+```
+
+- 结果目录包含 `run.json`、逐任务结果、带 SHA256 的原始 `.samples.jsonl`、JSON/CSV 汇总、自包含 `report.html` 与独立诊断记录。新运行使用新目录，不覆盖旧 ResNet 演示；中断恢复用同参数加 `--resume`，代码、依赖、CPU、清单和任务选择变化会拒绝混用。
+- `--models`、`--variants` 可筛选实验；`--no-thread-sweep`、`--no-observations` 可缩小 smoke 运行。完整配置白名单不随筛选改变。
+- 推理微基准从已准备的输入开始；流水线另测预处理、输入适配、推理、后处理及总墙钟时间。布局转换和 NumPy 桥接不能藏在计时外。RSS 用独立进程和原生系统接口采样，不是模型独占内存，可能漏掉短暂峰值。
+- **单图 smoke 只用于功能和探索对照。** 少量重复块不给正式采用建议；softmax 分数不是正确率；CPU 数据不代表 RK3588 NPU 性能。保留变慢、输出误差、异常及不支持项，不把未运行填成 0。
+- 正式模式需要独立 Development 集（128 张，其中固定 64 张测性能）。量化门槛另需 256 张校准图、128 张带标签开发图和至少 1000 张带标签 Holdout；各 split 不能泄漏。阶段 A 的 FP32/单图结果不代替阶段 B 的真实 INT8 与带标签评估。
+- 数据通过 `--manifest` 提供 JSON 清单：`schema_version=1`、`root`（相对清单目录）及 `images`。每项含 `id`、相对 `path`、真实文件 `sha256`、`split`、可选 `source_id`/来源/许可和 `label`。标签必须为固定 ImageNet-1K 映射的 0..999，无真值用 `null`，不能把模型预测当真值；清单会核对哈希、路径边界和跨 split 重叠。
+
+### 多图与 INT8 对照（阶段 B，独立数据与冻结评估）
+
+数据选用 Oxford-IIIT Pet 的 **20 个人工冻结映射犬种**，不是完整 ImageNet 验证集。三个模型仍对全部 1000 类输出和排名，不能把候选类别缩成20类提升分数。图片和许可来源、别名、镜像固定版本及内容哈希见 [configs/classifier_dataset.json](configs/classifier_dataset.json) 与运行产生的 `source.json`；独立真值来自公开数据标注，不来自模型预测。
+
+原站归档下载速度不足且不支持 Range，实际准备改用相同 CC BY-SA 4.0 许可的固定公开镜像，核对两个 Parquet 的 LFS SHA256。**不把镜像校验冒充牛津原始 tar 的 MD5 验证**。图片只用于本地研究，不公开再分发；原图所有者版权仍保留。
+
+```bash
+# 数据读取依赖只装在项目.venv，不升级现有CPU推理依赖
+.venv/Scripts/python.exe -m pip install -r requirements-classifier-data.txt
+
+# 显式允许下载固定revision的许可镜像，不执行远端dataset代码
+.venv/Scripts/python.exe tools/download_classifier_mirror.py \
+    --download --output-dir data/classifier-mirror-cache
+
+# 校准256、开发128、最终持出1000；同seed/源产生同清单，默认拒绝覆盖
+.venv/Scripts/python.exe tools/prepare_classifier_dataset.py \
+    --mirror-dir data/classifier-mirror-cache --output-dir data/classifier-pets
+
+# M4：固定开发集64张测性能，独立5块，每块预热20/测量200
+# 前后基线哨兵超过10%漂移：至多复测该组一次，旧样本归档不删除
+.venv/Scripts/python.exe tools/run_classifier_benchmark.py \
+    --mode formal --manifest data/classifier-pets/manifest.json \
+    --no-observations --profile --output-dir build/classifier-fp32-formal-v2
+
+# M5/M6：仅接受经过完整性与漂移控制审计的正式FP32输入
+.venv/Scripts/python.exe tools/run_classifier_stage_b.py \
+    --manifest data/classifier-pets/manifest.json \
+    --fp32-run build/classifier-fp32-formal-v2 --output-dir build/classifier-stage-b-v2
+```
+
+- Calibration 与 Development 从来源训练部分分层取得，Holdout 只从来源测试部分取得；各 split 做源身份、JPEG字节及 EXIF规范RGB像素哈希去重。不能保证排除所有近重复，不能证明预训练模型从未见过这些图片。
+- 量化家族单独保存 **QB/Q1/Q2/Q3**：QB是量化预处理后的FP32图；Q1=MinMax/per-tensor，Q2只改权重per-channel，Q3只改为99.99 Percentile。均为QDQ S8S8、线程1与受控CPU会话，未覆盖算子保留浮点；实际整数核须另看runtime profile，QDQ节点本身不证明INT8执行。
+- 校准逐张收集范围/直方图并清空featuremap。Q1/Q2共用同一MinMax范围缓存；缓存与父QB、清单、校准图片列表及参数哈希绑定，图中不重复归一化。
+- 方案只在开发集选择。三模型候选、产物和线程全部冻结后才允许最终Holdout评估；冻结SHA、数据SHA或产物/线程不匹配会拒绝执行，最终失败不改选候选。候选采用预算与数据规模只是本项目研究约定，不是普遍性能或精度保证。
+- 所有实验不训练、不连接板卡。保留 unsupported、精度超预算、不确定与负加速，既不拼接旧单图数据，也不把小子集成绩称为完整ImageNet准确率。
+- Windows 中文工程路径下，本机 ONNX 原生形状推断会缺少 `QB-inferred.onnx`。工具将原图哈希校验副本和计算文件放在系统 ASCII 临时目录，再校验复制到输出盘内并原子发布；不更改图或校准参数、不设置全局环境。若系统 `TEMP/TMP` 也含非 ASCII 字符，会明确拒绝，需先指定合法 ASCII 临时目录。
+- `completed_with_failures`、`int8_evidence_status=failed_runtime/unsupported/partial_failure/not_evaluated` 表示未取得完整 INT8 证据，不是“量化没有收益”；只有真实完成开发比较后，才允许给出已测拒绝或采用判定。CLI 对不完整轮返回非零退出码。
+- [首轮阶段 B 记录](build/classifier-stage-b/summary.json) 保留作工程诊断：九个 INT8 方案因中文路径失败，旧版“无 INT8 收益”判定无效。该轮已冻结 FP32 候选并访问过 Holdout；路径修复后的重跑保持数据、量化参数、门槛与仅开发集选择规则不变，**不依据旧 Holdout 成绩调参，也不把本数据集说成从未访问过的新持出集**。
+
+#### 本轮正式结果与采用边界
+
+先看 [决策速览 HTML](build/classifier-stage-b-v2/decision-summary.html) 与 [决策 JSON](build/classifier-stage-b-v2/decision-summary.json)；完整数据见 [阶段 B 原始报告](build/classifier-stage-b-v2/report.html)、[完整 JSON](build/classifier-stage-b-v2/summary.json)、[交付审计](build/classifier-stage-b-v2/delivery-audit.json) 和 [M4 正式 FP32 消融](build/classifier-fp32-formal-v2/report.html)。
+
+冻结后独立确认使用 **5 块 × 预热 20 × 测量 500**；加速比是配对块估计，直接对照均为**同一轮、同一模型的 O1.t1**，不是跨轮借用 PyTorch 基线。以下为推理微基准，不含预处理/解码：
+
+| 模型 | 最终冻结方案 | P50 / P95 (ms) | 配对加速比 [95% CI] | Holdout Top-1 / Top-5 |
+|---|---|---:|---:|---:|
+| ResNet18 | O1 FP32，4 线程 | 6.656 / 9.272 | 4.95× [4.92, 4.98] | 83.4% / 97.9% |
+| MobileNetV3-Small | O1 FP32，2 线程 | 1.013 / 1.266 | 1.25× [1.17, 1.33] | 81.4% / 96.3% |
+| ShuffleNetV2 ×1.0 | O1 FP32，4 线程 | 1.794 / 2.137 | 1.52× [1.46, 1.56] | 82.9% / 96.9% |
+
+三组持出评估均为 1000 张、完整 1000 类排名，Top-1/Top-5 相对自身 FP32 基线下降均为 0pp。仅覆盖上述 20 个犬种，不能当完整 ImageNet 准确率；旧工程失败轮的 Holdout 访问已披露。五块 CI 仍是探索性不确定性，不表示普遍最优。
+
+- **FP32 因素取舍**：ResNet18 单独融合只有约 1% 变化，布局+融合约 1.27×；ShuffleNetV2 的单独布局约 2.04×、布局+融合约 2.36×（均相对本轮 M4 B0.t1）。MobileNetV3 的 O1/O0 图优化增量约 2.69×。这些比值不能相乘或拼到 M6 确认比值上。
+- **线程不是越多越好**：MobileNetV3 的 4 线程在开发筛选中 P95 比 O1.t1 高约 12.9%，未过预设尾延迟门槛，最终选 2 线程。描述性 Pareto 表可能仍出现其更低的名义 P50，不代表可以采用。
+- **ResNet18 INT8**：三种方案相对 QB.t1 约 1.17×提速、文件约缩到四分之一；但开发精度下降 CI 跨越 1pp 预算，判为证据不足，未采用。不是“INT8 一点也不快”。
+- **MobileNetV3 INT8**：三种固定 S8S8 配方约 0.64×（反而变慢），开发 Top-1/Top-5 均退化到 0，明确拒绝。仅四张开发图的 [数值诊断](build/classifier-stage-b-v2/mobilenet-int8-diagnostic.json) 在关闭/开启 ORT 图优化时也呈同样退化、输出有限；具体逐层根因未定位，不把现象冒充模型结构的普遍因果结论。
+- **ShuffleNetV2 INT8**：速度比约 0.99×，未达到 5% 采用收益；Q1 开发 Top-1 下降约 5.47pp，per-channel 的 Q2/Q3 点估计改善但 CI 仍未过预算。文件变小不等于执行更快。
+- **代价分开计**：三模型候选的独立分类流水线总墙钟 P50 分别为 10.316 / 2.261 / 2.943ms（已解码 RGB 起点，不含磁盘解码）；RSS 峰值约 154.71 / 115.34 / 119.57MiB，相对各自单线程观测增加约 2MiB，含运行库、64 图输入与分配器。INT8 没有全矩阵 RSS 观测，不把文件压缩等同 RAM 下降。M4 `load_ms` 与 `first_inference_ms` 保留在原始 worker 记录，不能并入稳定推理 P50。
+
+交付复验：285 个独立 OS 进程实例（261 个不同整数 PID，复用由创建时间区分）、36,000 个正式推理样本；30 组漂移均接受，最大因子 1.02424。完整分类/旧入口离线回归 **300 项通过**，日志见 [build/classifier-final-regression.log](build/classifier-final-regression.log)。不训练、不连接硬件、不提交或推送 Git。
+
 ### 1. 模拟运行 (脱机测试全流程)
 无需外接机械臂硬件，在 PC 或板端直接验证“自然语言指令 ➔ Qwen 解析 ➔ 逆解 ➔ 虚拟执行”：
 ```bash

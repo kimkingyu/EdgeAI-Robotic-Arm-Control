@@ -2,13 +2,15 @@
 """YOLOv8 检测头后处理：把 [1, 84, 8400] 解成可用的检测框。
 
 之前这一步是空的，NPU 算出的张量被直接丢弃，所以整条"检测 → 抓取坐标"的
-链路是断的。这里只做解码，不碰坐标变换与控制。
+链路是断的。这里解码并还原预处理几何，不碰机械臂坐标与控制。
 
 布局说明（实测确认，非假设）：
   84 = 4 (cx, cy, w, h) + 80 (COCO 类别分数)
   8400 = 三个尺度的 anchor 点数 80*80 + 40*40 + 20*20
   坐标已是网络输入尺度（640）下的像素值，不是归一化值。
 """
+import math
+from numbers import Integral, Real
 from typing import Any, Dict, List, Optional, Sequence
 
 try:
@@ -39,7 +41,14 @@ class PostprocessError(ValueError):
 
 def _as_matrix(tensor, role: str) -> "np.ndarray":
     """规范化一个输出为 (attributes, anchors)。"""
-    tensor = np.asarray(tensor)
+    if not HAS_NUMPY:
+        raise PostprocessError("后处理需要 numpy")
+    try:
+        tensor = np.asarray(tensor)
+    except (TypeError, ValueError) as error:
+        raise PostprocessError("%s 无法转换为数值张量" % role) from error
+    if tensor.dtype.kind not in "iuf" or not np.all(np.isfinite(tensor)):
+        raise PostprocessError("%s 必须是有限实数张量，不接受 NaN/Inf" % role)
     if tensor.ndim == 3:
         if tensor.shape[0] != 1:
             raise PostprocessError("%s 暂不支持 batch>1，收到 %s" % (role, tensor.shape))
@@ -113,19 +122,87 @@ def nms(boxes: "np.ndarray", scores: "np.ndarray", threshold: float) -> List[int
     return keep
 
 
+def _shape_hw(shape, role, lengths):
+    """拒绝浮点/布尔/空尺寸，不靠 int() 把错误输入截断成合法值。"""
+    try:
+        valid = len(shape) in lengths
+        height, width = shape[0], shape[1]
+    except (TypeError, IndexError, KeyError) as error:
+        raise PostprocessError("%s 需要 (h,w) 尺寸" % role) from error
+    if not valid or any(isinstance(value, (bool, np.bool_)) or
+                        not isinstance(value, Integral) or value < 1
+                        for value in (height, width)):
+        raise PostprocessError("%s 尺寸必须为正整数：%s" % (role, shape))
+    return int(height), int(width)
+
+
+def _validate_transform(transform, orig_h, orig_w, in_h, in_w):
+    """核对完整变换，任何字段错配都不能作为原图坐标使用。"""
+    dimensions = ("source_width", "source_height", "target_width", "target_height",
+                  "resized_width", "resized_height")
+    padding = ("pad_left", "pad_top")
+    fields = {"mode", "scale_x", "scale_y", *dimensions, *padding}
+    if not isinstance(transform, dict) or set(transform) != fields:
+        raise PostprocessError("transform 必须包含且仅包含规定的几何字段")
+    mode = transform["mode"]
+    if not isinstance(mode, str) or mode not in ("resize", "letterbox"):
+        raise PostprocessError("transform.mode 必须为 resize 或 letterbox")
+    for key in dimensions + padding:
+        value = transform[key]
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral):
+            raise PostprocessError("transform.%s 必须为整数" % key)
+        if value < (0 if key in padding else 1):
+            raise PostprocessError("transform.%s 尺寸或填充非法" % key)
+    if (transform["source_width"], transform["source_height"]) != (orig_w, orig_h):
+        raise PostprocessError("transform.source 与 orig_shape 不匹配")
+    if (transform["target_width"], transform["target_height"]) != (in_w, in_h):
+        raise PostprocessError("transform.target 与 input_size 不匹配")
+    resized_w, resized_h = transform["resized_width"], transform["resized_height"]
+    left, top = transform["pad_left"], transform["pad_top"]
+    if mode == "resize":
+        expected_w, expected_h = in_w, in_h
+        expected_left = expected_top = 0
+    else:
+        scale = min(in_w / orig_w, in_h / orig_h)
+        expected_w = math.floor(orig_w * scale + 0.5)
+        expected_h = math.floor(orig_h * scale + 0.5)
+        expected_left = (in_w - expected_w) // 2
+        expected_top = (in_h - expected_h) // 2
+    if resized_w > in_w or resized_h > in_h or \
+            (resized_w, resized_h, left, top) != \
+            (expected_w, expected_h, expected_left, expected_top):
+        raise PostprocessError("transform 尺寸/填充不符合几何模式与 half-up 舍入约定")
+    for key, expected in (("scale_x", resized_w / orig_w),
+                          ("scale_y", resized_h / orig_h)):
+        value = transform[key]
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real) or \
+                not math.isfinite(value) or value <= 0 or \
+                not math.isclose(value, expected, rel_tol=1e-12, abs_tol=0.0):
+            raise PostprocessError("transform.%s 必须是与实际缩放尺寸一致的有限正数" % key)
+    return left, top, float(transform["scale_x"]), float(transform["scale_y"])
+
+
 def decode(outputs,
            orig_shape: Sequence[int],
            input_size: Sequence[int] = (640, 640),
            conf_thresh: float = 0.25,
            nms_thresh: float = 0.45,
            class_names: Optional[Sequence[str]] = None,
-           max_detections: int = 100) -> List[Dict[str, Any]]:
+           max_detections: int = 100,
+           transform: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """解码检测头输出。
 
     orig_shape : 原始画面的 (h, w[, c])，用于把坐标还原回去。
-    input_size : 网络输入的 (h, w)。当前预处理是直接 resize，没有 letterbox，
-                 所以 x/y 方向各自独立缩放；若将来改用 letterbox，这里必须同步改。
+    input_size : 网络输入的 (h, w)。
+    transform  : Preprocessor.run_with_transform 返回的几何字典；缺省保留直接 resize。
+                 NMS 仍在网络坐标执行，随后减填充、除实际缩放、裁剪到原图。
     """
+    if not HAS_NUMPY:
+        raise PostprocessError("后处理需要 numpy")
+    orig_h, orig_w = _shape_hw(orig_shape, "orig_shape", (2, 3))
+    in_h, in_w = _shape_hw(input_size, "input_size", (2,))
+    geometry = None if transform is None else _validate_transform(
+        transform, orig_h, orig_w, in_h, in_w)
     coords, scores_all = _as_prediction_parts(outputs)
     num_classes = scores_all.shape[0]
     names = tuple(class_names) if class_names is not None else COCO_CLASSES
@@ -152,7 +229,10 @@ def decode(outputs,
 
     cx, cy, w, h = (boxes_cxcywh[:, 0], boxes_cxcywh[:, 1],
                     boxes_cxcywh[:, 2], boxes_cxcywh[:, 3])
-    boxes = np.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], axis=1)
+    with np.errstate(over="ignore", invalid="ignore"):
+        boxes = np.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], axis=1)
+    if not np.all(np.isfinite(boxes)):
+        raise PostprocessError("cxcywh 转换后的框坐标不是有限实数")
 
     # 逐类别做 NMS，避免不同类别的重叠目标互相抑制。
     keep: List[int] = []
@@ -165,18 +245,27 @@ def decode(outputs,
     keep.sort(key=lambda i: float(scores[i]), reverse=True)
     keep = keep[:max_detections]
 
-    orig_h, orig_w = int(orig_shape[0]), int(orig_shape[1])
-    in_h, in_w = int(input_size[0]), int(input_size[1])
-    if orig_h < 1 or orig_w < 1 or in_h < 1 or in_w < 1:
-        raise PostprocessError("尺寸必须为正：orig=%s input=%s" % (orig_shape, input_size))
-    scale_x, scale_y = orig_w / in_w, orig_h / in_h
-
+    # 保持旧 resize 的乘法还原与 NMS 顺序；显式变换使用舍入后的实际 sx/sy。
     results: List[Dict[str, Any]] = []
     for index in keep:
-        x1 = float(np.clip(boxes[index, 0] * scale_x, 0, orig_w - 1))
-        y1 = float(np.clip(boxes[index, 1] * scale_y, 0, orig_h - 1))
-        x2 = float(np.clip(boxes[index, 2] * scale_x, 0, orig_w - 1))
-        y2 = float(np.clip(boxes[index, 3] * scale_y, 0, orig_h - 1))
+        if geometry is None or transform["mode"] == "resize":
+            # resize 的 pad 为 0，倒数由整数尺寸直接求得，与除 sx/sy 数学等价。
+            # 沿用旧 float32 乘法，避免提升到 float64 改变半像素边界的取整结果。
+            scale_x, scale_y = orig_w / in_w, orig_h / in_h
+            mapped = (boxes[index, 0] * scale_x, boxes[index, 1] * scale_y,
+                      boxes[index, 2] * scale_x, boxes[index, 3] * scale_y)
+        else:
+            left, top, scale_x, scale_y = geometry
+            mapped = ((float(boxes[index, 0]) - left) / scale_x,
+                      (float(boxes[index, 1]) - top) / scale_y,
+                      (float(boxes[index, 2]) - left) / scale_x,
+                      (float(boxes[index, 3]) - top) / scale_y)
+        if not np.all(np.isfinite(mapped)):
+            raise PostprocessError("逆变换后的框坐标不是有限实数")
+        x1 = float(np.clip(mapped[0], 0, orig_w - 1))
+        y1 = float(np.clip(mapped[1], 0, orig_h - 1))
+        x2 = float(np.clip(mapped[2], 0, orig_w - 1))
+        y2 = float(np.clip(mapped[3], 0, orig_h - 1))
         if x2 <= x1 or y2 <= y1:
             continue  # clamp 后退化为零面积的框直接丢弃
         class_id = int(class_ids[index])

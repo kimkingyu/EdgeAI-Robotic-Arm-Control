@@ -13,8 +13,10 @@
 3. **实测证据 (Evidence)**：终端输出的成功日志、FPS/时延、报错与修复记录。
 4. **简历亮点 (Value)**：提炼成可直接用于简历与面试的 STAR 技术点。
 
-> 执行方式：`python C:/Users/admin/.agents/skills/edgeai-arm-dev-tracker/scripts/record_step.py --title "..." --module "..." --how "..." --why "..." --evidence "..." --value "..."`  
+> 执行方式（在项目根目录）：`python .narrafork/skills/edgeai-arm-dev-tracker/scripts/record_step.py --title "..." --module "..." --how "..." --why "..." --evidence "..." --value "..."`
 > 日志持久化路径：`docs/dev_logs/DEV_PROGRESS_JOURNAL.md`
+>
+> 项目专用技能只放在本仓库的 `.narrafork/skills/`，不得写入用户或 NarraFork 的全局技能目录。
 
 ---
 

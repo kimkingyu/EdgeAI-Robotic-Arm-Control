@@ -558,5 +558,305 @@
     "why": "原始 INT8 全零的根因是坐标与分类分数共享量化范围，不是 normal/mmse/kl 算法选择。拆分输出让两组张量独立量化，是恢复 INT8 速度且保留分类可用性的最小结构性修复。FP16 虽可用但慢2.3倍，不能因为它可用就停止优化。原始坏模型不覆盖、不删除，保留作对照。",
     "evidence": "双输出 ONNX 真实图验证通过：两个输出 [1,4,8400] 与 [1,80,8400]。拆分 INT8 真实输出：2个张量，坐标 min=5.149 max=648.792，分类 score max=0.743953；6张真实校准图检出12个目标，broccoli/giraffe/vase/zebra等均有非零分数。单实例 taskset -c 4-7、20 warmup+100轮：原坏INT8 P50 43.69ms/P99 51.18ms/22.9FPS/score_max 0；拆分INT8 42.40ms/49.50ms/23.6FPS/score_max 0.743953；FP16 99.14ms/104.96ms/10.1FPS/0.7998。三核并发池6次请求全部返回双输出形状且分数非零，单请求耗时63.11-92.46ms。默认真实入口 tools/run_vlm_grasp.py --mock --no-vlm 实跑加载 yolov8n_split_int8.rknn，预处理5.4ms，推理51.1ms，检出6个目标。测试全过：split exporter 2项、postprocess 22项、pipeline 23项。",
     "value": "用输出契约重构而不是继续盲试量化算法，恢复了INT8的实际检测功能和23.6FPS速度；同时验证拆分输出不破坏双输出后处理、默认入口或三核并发池，完成一次可量化的边缘推理性能修复。"
+  },
+  {
+    "step": "57",
+    "timestamp": "2026-09-25 01:19:23",
+    "title": "将项目研发追踪技能从全局迁回仓库",
+    "module": "Tooling/Skills",
+    "how": "将用户全局 .agents/skills/edgeai-arm-dev-tracker 的4个文件完整迁移到本项目 .narrafork/skills/edgeai-arm-dev-tracker；修改 SKILL.md 第27-30行与 CLAUDE.md 第16-19行，改用项目相对路径并明确技能只放项目；.gitignore 第1-2行仅放行技能目录，其余 NarraFork 本地状态仍忽略。未改动其他技能，也未提交或推送。",
+    "why": "项目专用技能不应注入其他项目的会话，也不应依赖某台 Windows 机器的用户目录；技能和执行脚本应跟随项目保存。",
+    "evidence": "迁移时4个文件SHA256一致；Skill工具返回的Base directory已是本仓库目录；quick_validate输出Skill is valid；两份Python脚本语法及项目根目录定位通过，status_summary读取到原第56步；两个全局目录均无该技能。git diff --check通过，git ls-files --others仅列出4个技能文件，project.db及wal/shm继续被忽略。验证命令首次因本机Python 3.6不支持capture_output失败，改用subprocess.PIPE后通过，技能脚本本身未改。",
+    "value": "纠正项目级与全局自动化配置的作用域，消除用户绝对路径依赖，保持跨项目隔离及仓库可复现性。"
+  },
+  {
+    "step": "58",
+    "timestamp": "2026-09-30 16:02:22",
+    "title": "建立 ResNet demo 独立 CPU 推理环境",
+    "module": "Vision/Environment",
+    "how": "确认默认 python 为3.6.8后，使用 py -3.12 -m venv .venv 新建项目内环境；从官方 CPU wheel 索引安装 torch/torchvision，在同一环境安装 onnx/onnxruntime。新增 requirements-resnet.txt 锁定本轮实际顶层依赖版本，不修改板端 requirements.txt 或系统Python。",
+    "why": "先交付不依赖摄像头、机械臂或NPU的真实分类demo；隔离桌面推理依赖，避免污染现有板端工具链与全局环境。",
+    "evidence": "Python3.12.10；torch2.14.0+cpu且torch.version.cuda=None；torchvision0.29.0+cpu；numpy2.5.2；Pillow12.3.0；onnx1.23.1；onnxruntime1.30.0均成功导入。pip check输出No broken requirements found；torch.onnx.export保留显式dynamo/外部数据参数。此步没有模型推理或硬件性能结论。",
+    "value": "构建可复现、CPU-only、与机器人运行环境隔离的图像分类验证环境。"
+  },
+  {
+    "step": "59",
+    "timestamp": "2026-09-30 16:13:07",
+    "title": "实现 ResNet18 真实分类、融合对照和离线演示入口",
+    "module": "Vision/ResNet/Tooling",
+    "how": "新增 src/vision/resnet_classifier.py、tools/run_resnet_demo.py、tools/export_resnet_onnx.py、tools/test_resnet_demo.py；README补充独立CPU环境、真实图片demo及ONNX使用方式。分类使用官方权重预处理，缺依赖/权重显式失败；融合覆盖stem/BasicBlock/downsample共20对Conv-BN；权重仅weights_only=True安全加载。报告区分加载、预处理、推理、后处理及单图重复基准，并对HTML动态文本转义。",
+    "why": "先形成无机械臂条件下可验证的真实视觉demo，避免复用YOLO归一化或RKNN缺失时的Mock延时；优化是否有效由后续真实A/B决定，不预设加速。",
+    "evidence": "30项ResNet单测与22项YOLO后处理回归通过，共Ran 52 tests。旧拆分导出测试类因本机没有其硬编码的板端YOLO ONNX路径而跳过，未计为通过。首轮发现整型logits未提前拒绝，已修复；审查移除了不安全torch.load回退，并补测试确认只调用一次weights_only=True。HTML转义、拒绝覆盖、无依赖help和计时边界测试通过。真实预训练模型推理与ONNX运行验证尚在下一步。",
+    "value": "将模型契约、编译优化对照、可视化报告和安全失败路径组织成可复现CPU视觉验证工具，而非伪造硬件演示。"
+  },
+  {
+    "step": "60",
+    "timestamp": "2026-09-30 16:19:21",
+    "title": "完成 ResNet18 真实图片 A/B、ONNX 一致性与回归验证",
+    "module": "Vision/Validation",
+    "how": "使用项目 .venv 运行 tools/test_resnet_demo.py 与 YOLO 回归；运行 tools/run_resnet_demo.py --image data/resnet-demo/dog.jpg --download-weights --compare --benchmark --threads 1 --output-dir build/resnet-demo；随后运行 tools/export_resnet_onnx.py --image data/resnet-demo/dog.jpg --output models/weights/resnet18-fp32.onnx --threads 1。核对报告计时样本、阶段求和、权重一致和 ONNX SHA256。",
+    "why": "用真实预训练权重与真实图片验证分类、已有 Conv-BN 融合和模型导出链路；将输出一致性与性能测量分开，不以随机权重单测代替真实演示，不以单图测试宣称数据集精度。",
+    "evidence": "build/resnet-unit-tests.log: Ran 52 tests, OK (skipped=1)，其中30项ResNet、22项YOLO通过；板端YOLO导出测试类因本机缺指定ONNX而跳过。真实图片两版本Top1均为Samoyed，softmax分数0.8846226；融合20对Conv-BN，max_abs_error=1.049041748e-05，Top1/Top5一致。预热10次、3轮交错、每版本150个样本，CPU单线程推理P50/P95：baseline 33.66265/34.4167ms，fused 33.0592/33.78903ms；流水线P50 38.49905/37.87625ms。比值1.018x仅为本次微基准，不宣称稳定加速。ONNX opset17导出成功，ORT CPU max_abs_error=1.096725464e-05，Top1/Top5一致，SHA256=e7108d52a585a776b8b6c7d6c7c7e0bab3957f3cc44d90ead6773d124864403b。pip check通过；未连接板卡、机械臂或NPU。",
+    "value": "构建可追溯的离线分类验证流程，保留真实逐样本时延、数值误差、权重与导出产物哈希；区分功能验证、微基准及硬件性能边界，不把已有融合技术包装成原创。"
+  },
+  {
+    "step": "61",
+    "timestamp": "2026-09-30 16:19:46",
+    "title": "完成 ResNet18 离线报告与使用说明交付检查",
+    "module": "Vision/Docs",
+    "how": "核对 README.md 第304至329行的独立环境、分类对照、ONNX导出和重跑说明；只读复核新增分类、报告、导出及测试代码；在浏览器打开 build/resnet-demo/demo.html，检查 DOM、内嵌图片和外部资源；执行 git diff --check、git check-ignore 和 pip check。",
+    "why": "让报告可离线查看、操作可复现，明确CPU分类与机械臂抓取的边界；避免将大体积模型、虚拟环境和生成结果误纳入版本库，保留用户已有修改。",
+    "evidence": "只读复核未发现重大可复现问题。浏览器 title=ResNet18 CPU Demo，内嵌图片加载成功，1440px视口下页面宽度1440px，外部资源列表为空；报告展示Top5、20对融合的一致性、计时统计和结果边界。截图写盘受MCP工作区限制，内联截图超时，未生成或交付截图。pip check无损坏依赖；虚拟环境、真实图片、权重、ONNX及build报告均命中git忽略规则。交付文件为build/resnet-demo/demo.html、results.json，以及models/weights/resnet18-fp32.onnx和同名JSON元数据。未提交、未推送，未连接硬件。",
+    "value": "交付包含真实推理、可审计基准、模型导出校验与离线可视化的工程验证工具，并清晰保留测试跳过项和未验证硬件边界。"
+  },
+  {
+    "step": "62",
+    "timestamp": "2026-10-01 17:54:43",
+    "title": "为独立分类实验隔离视觉包导入副作用",
+    "module": "Vision/Infrastructure",
+    "how": "将src/vision/__init__.py的摄像头与RKNN顶层导入改为__getattr__按需导出，保留USBCamera和RKNNObjectDetector公共名称。使用.venv/Scripts/python.exe -S验证无第三方包时导入src.vision不会载入相机、NumPy、OpenCV或NPU模块。",
+    "why": "新的CPU分类实验预检与worker必须不依赖硬件模块；先隔离包导入副作用，保证缺重依赖时help/preflight仍可执行，也避免把无关模块内存计入实验。",
+    "evidence": "PASS: importing src.vision does not load camera, NumPy, OpenCV or NPU modules；仅验证惰性导入，未访问摄像头、机械臂或板卡；后续继续跑旧入口回归。",
+    "value": "用按需导出保持公共API兼容，同时隔离可选硬件依赖与基准启动成本。"
+  },
+  {
+    "step": "63",
+    "timestamp": "2026-10-01 18:13:03",
+    "title": "实现三模型 FP32 实验协议与独立运行器",
+    "module": "Vision/Benchmark",
+    "how": "新增classification.py/classification_variants.py/classification_benchmark.py，通用ONNX导出、独立worker与报告汇总工具，固定三模型V1与30组FP32矩阵。worker单独设置线程环境，缓存规范化输入和参考logits，分离推理、流水线、RSS与profile；记录权重/输入/代码哈希、原始JSONL，恢复失败记录移至归档目录。",
+    "why": "从单ResNet演示扩展为同模型纵向、同优化跨模型横向的可解释实验；隔离线程池和加载副作用，不把输入转换、内存采样或profile开销混入推理时延。",
+    "evidence": "主代理实跑核心/运行器/旧ResNet/YOLO回归88项通过，数据协议与报告35项通过，共123项。只读preflight列出30个唯一配置，所有CPU依赖就绪，单图smoke可执行；development 0/128、performance 0/64，quantization calibration 0/256、labeled development 0/128、holdout 0/1000，明确阻止正式/精度结论。本步尚未执行真实三模型性能对照，单测随机权重不当作实测。",
+    "value": "实现可复现多模型优化实验基础设施，用严格数据门槛、独立worker、哈希溯源和因素对照约束误导性的加速与精度结论。"
+  },
+  {
+    "step": "64",
+    "timestamp": "2026-10-01 18:17:25",
+    "title": "修复 Windows venv 启动器导致的 worker PID 溯源误判",
+    "module": "Vision/Benchmark",
+    "how": "真实两组联调定位到.venv/Scripts/python.exe启动器PID与os.getpid不同；新增child_python()，在Windows使用sys._base_executable并设置__PYVENV_LAUNCHER__保留原虚拟环境，统一导出/测量子进程启动路径。新增PID和sys.prefix一致性回归，不放宽job/hash/PID校验。",
+    "why": "保留真实worker PID绑定，同时使超时kill能终止实际执行进程而非仅终止启动器，避免后台残留进程污染后续基准。",
+    "evidence": "首次contract-smoke因PID误判失败，旧产物保留：B0启动器18912/真实24232，O1启动器17740/真实23224；job SHA均相同。修复后13项runner测试通过；contract-smoke-v2的真实Torch/ORT两组均passed，各3个真实样本，独立PID，summary integrity_errors为空。torch 2.14.0+cpu与sys.prefix仍为项目.venv。未执行正式精度评估。",
+    "value": "定位Windows虚拟环境重定向进程与真实worker的区别，以实际进程一致性证据修复审计和超时终止语义，而非绕过校验。"
+  },
+  {
+    "step": "65",
+    "timestamp": "2026-10-01 18:30:46",
+    "title": "完成阶段 A 三模型三十配置真实 FP32 探索对照",
+    "module": "Vision/Validation",
+    "how": "用run_classifier_benchmark.py --mode smoke --image data/resnet-demo/dog.jpg --download-weights --warmup 5 --iterations 30 --repeats 2 --profile --output-dir build/classifier-fp32-smoke串行执行。采集独立inference/pipeline/memory/profile worker，核对原始JSONL、三组官方权重/ONNX哈希、代码指纹和进程身份。另跑最终单元与旧入口回归，补充README第331行起多模型使用说明；浏览器只读检查自包含报告。",
+    "why": "给后续优化研究提供跨模型因素对照，而非只看模型大小；以真实原始分布、负结果和数值误差审计方案，预热/加载、RSS采样和profile不混入推理时延。",
+    "evidence": "30配置全部通过：60个推理worker共1800样本，18个pipeline worker共540样本，18个独立RSS worker，18个独立profile；114个真实PID互异，全部数值校验通过，summary integrity_errors为空，原始样本与权重/导出文件SHA256审计通过。ResNet/MobileNetV3/ShuffleNet融合20/34/56对；最大logits误差4.8637390137e-05。单线程P50(ms)，按B0/F1/L1/FL1/O0/O1：ResNet18=32.9733/32.4888/26.5356/25.6795/28.0512/22.3550；MobileNetV3-Small=2.8841/2.5071/2.6043/2.1597/3.4006/1.2705；ShuffleNetV2=6.9889/6.5035/4.6785/4.1383/3.6534/2.6996。此为单图探索，非稳定加速或准确率结论。最终Ran124 tests, OK(skipped=1)，板端测试类因缺指定ONNX跳过；pip check、git diff --check通过。报告浏览器30行、0脚本、0外部资源、1440px无整页溢出。正式Development/校准/带标签Holdout仍缺，不标阶段B完成，未连接硬件，未提交推送。",
+    "value": "交付三模型多因素CPU优化评测工具，独立进程、同源权重、数值一致性和完整原始时延审计支持正负结论；验证ORT关闭优化时MobileNet反而更慢，不把所有优化宣传为必然加速。"
+  },
+  {
+    "step": "66",
+    "timestamp": "2026-10-01 23:43:56",
+    "title": "核查公开数据许可并实现官方档案下载校验",
+    "module": "Vision/Data",
+    "how": "核对牛津官方Oxford-IIIT Pet页面许可、已安装torchvision._RESOURCES的两个发布MD5、20个犬种到ImageNet V1规范标签索引。新增download_classifier_dataset.py：仅显式--download联网，HTTPS官方端点白名单、gzip/大小/MD5检查、本地SHA256、临时发布；处理原站重定向到同一牛津机构thor.robots.ox.ac.uk，保留第一次失败日志。",
+    "why": "为阶段B获得有明确来源和许可的真实图片及独立真值，不把代码仓库许可证当图片许可证，也不把模型预测当标签。将已核对的牛津发布重定向纳入精确端点白名单，而非放开任意镜像。",
+    "evidence": "7项下载边界单测通过；确认CC BY-SA4.0与原图版权保留声明、明确仅本地研究不公开原图。发布MD5 images=5c4f3ee8e5d25df40f4fd59a7f44e54c annotations=95a8c909bbe2e81eed6a22bccdf3f68f；本机磁盘剩余约60GB。实际档案尚待下载与完整校验，本步不标记数据或量化实验完成。",
+    "value": "构建许可溯源、发布校验值与本地哈希分离、限量安全下载的科研数据获取流程，避免无授权数据和伪造精度标签。"
+  },
+  {
+    "step": "67",
+    "timestamp": "2026-10-02 00:27:47",
+    "title": "用固定许可镜像解除牛津原站低速获取阻塞",
+    "module": "Vision/Data/Environment",
+    "how": "原站实际下载约67MiB且HTTP Range返回200不提供Content-Range，终止已超时的自有下载进程。核查Hugging Face timm/oxford-iiit-pet固定revision 089695c834a7deb60505b7cc506672db1c31a6aa、CC BY-SA4.0、37类独立标注和两个LFS SHA；新增download_classifier_mirror.py精确校验尺寸/SHA，不运行远端数据代码。仅在项目.venv安装requirements-classifier-data.txt中的pyarrow21.0.0，Torch等原有CPU依赖未升级。",
+    "why": "在不放宽许可、独立真值与256/128/1000数据门槛的情况下改用可审计公共镜像，避免等待数小时或伪称原站归档MD5通过。Parquet按recordbatch读，原图仍本地研究，不公开上传。",
+    "evidence": "固定镜像声明train3680/test3669，train size377611203 SHA b9ff432b33c77f4b50014684f25686a1cd523090686571743a6b7a257af27422，test size412654113 SHA 0997d4744ee6740e96f17f56b40b97c70076a4e4dad565bc63d0ffd03906f754；HTTPS probe收到PAR1且2MiB约4.3秒。PyArrow21.0.0本机导入与pip check通过，Torch2.14.0+cpu/Torchvision0.29.0+cpu保留。完整镜像下载和数据清单校验仍在进行，不据此宣称真实M4/M5完成。",
+    "value": "建立镜像版本、LFS内容哈希、许可和标签来源联合绑定，隔离新增数据依赖，透明保留原站失败与替代获取证据。"
+  },
+  {
+    "step": "68",
+    "timestamp": "2026-10-02 00:46:25",
+    "title": "准备独立20犬种研究数据并补齐正式测量漂移控制",
+    "module": "Vision/Data/Benchmark",
+    "how": "实际运行prepare_classifier_dataset.py --mirror-dir data/classifier-mirror-cache --output-dir data/classifier-pets --seed20261001，分层取calibration256/development128/holdout1000，验证JPEG字节、source_id与EXIF规范RGB像素哈希不重叠。新增classification_controls.py，在formal每model/block前后用独立B0.t1哨兵，预声明10%漂移门槛、至多一次组复测；拒绝的原始结果归档，未完整括定的组中断后整组重跑。",
+    "why": "从单图探索推进多图正式对照，保持真实独立标注与全1000类排名；既不把20犬种成绩称完整ImageNet精度，也不通过删除慢样本或放宽数据门槛制造加速。",
+    "evidence": "镜像2文件完整LFS SHA验证，实际train/test下载各约35.1/37.5s。真实数据1384张，cal256/dev128/held1000且held每犬种50张，rejected0，三项readiness通过；manifest SHA023b8054e6b9fdc7a61c71fdcade6e141276e014fa0d0f2109be989f2c4be3fb，source SHA90febe64ded4ff52dbeee317462f53e009ffda45b287ff8023ce169ab5c1d3fa。source明确原Oxford归档MD5未验证，只声称固定镜像SHA与独立镜像标注来源。115项数据/量化/控制/worker离线测试全通过。尚未真实M4/M5/最终holdout，不宣称量化收益。",
+    "value": "建立许可、标签映射、固定版本和防泄漏数据清单，加入事前漂移控制与有限复测，保障对照结论可溯源且保留负结果。"
+  },
+  {
+    "step": "69",
+    "timestamp": "2026-10-02 00:58:18",
+    "title": "实现受控静态量化、独立精度评估与冻结守卫",
+    "module": "Vision/Quantization",
+    "how": "新增classification_quantization.py和quantize_classifier_onnx.py：QB独立形状预处理不叠加归一化，Q1/Q2共用MinMax range cache仅改weight per_channel，Q3用99.99百分位；校准CPU/顺序/线程1、逐张清空featuremap、官方JSON范围缓存绑定QB与校准ID哈希。评估保留全部1000类别，最终holdout必须冻结文件SHA、模型/产物/线程匹配，配对精度CI以真实图片为单位。",
+    "why": "防止把默认线程池、不同校准输入或图预处理变化混进量化对照；把QDQ结构、实际整数核执行与精度预算分开检查，不假设INT8一定更快或无损。",
+    "evidence": "32项tiny ONNX/PIL离线测试通过，无跳过：验证S8S8/QDQ、真实weight scale粒度、MinMax缓存共用、Percentile逐张2048-bin直方图、数据门槛、无holdout像素读取、冻结SHA/线程保护、全1000类999排名、配对CI及runtime整数核证据。toy权重仅单测，未作真实性能/准确率结果。本步真实校准和M6 holdout尚未执行，不宣称量化收益。",
+    "value": "实现可审计的PTQ因素消融与防泄漏评估流程，建立校准缓存、模型图、数据与冻结参数的哈希绑定，保留退化与不支持状态。"
+  },
+  {
+    "step": "70",
+    "timestamp": "2026-10-02 01:46:34",
+    "title": "纠正长批次 PID 回收误判并增加原生进程创建标记",
+    "module": "Vision/Benchmark/Audit",
+    "how": "M4首轮150 worker数值通过但9个PID被Windows回收，原PID全局唯一规则使18记录untrusted。保留首轮所有原始产物，新增worker_process_identity用Windows GetProcessTimes FILETIME（Linux start_ticks/boot_id），父Popen wait前采集与worker自查字段核对。聚合器用PID+创建标记判独立；相同真实实例跨任务仍拒绝，缺marker的旧同PID仍保守untrusted，不补造身份救旧数据。",
+    "why": "操作系统允许PID在进程退出后回收，PID不同不是独立进程的必要条件；用真实生命周期标记替代不成立的全局唯一假设，同时保留任务/数据/代码哈希与进程绑定。",
+    "evidence": "首轮M4共30000样本、15漂移组全accepted，最大漂移1.0333，但仅141不同PID所以不用于最终结论。新增回归覆盖同PID不同创建时间、同实例复用、标记前缀造假、父子原生标记完全一致；60项相关回归通过。计划在classifier-fp32-formal-v2重测，尚未宣称v2或最终量化实验完成。",
+    "value": "以实测定位OS进程生命周期审计的错误假设，用原生创建时间建立可核对身份，透明保留失效审计轮与重测证据，避免删除异常记录包装成功。"
+  },
+  {
+    "step": "71",
+    "timestamp": "2026-10-02 02:25:36",
+    "title": "完成原生身份绑定的多图正式 FP32 重测与独立审计",
+    "module": "Vision/Benchmark/Validation",
+    "how": "在新目录classifier-fp32-formal-v2固定manifest、三模型30配置、5块预热20测量200，性能输入从development固定64图取得，名义测量/前后B0哨兵/profile互相分离。逐记录验证OS创建标记、job/模型/代码/数据/JSONL SHA与漂移账本，旧同PID缺生命周期轮保留且不用作最终结论。",
+    "why": "避免PID回收假阴性影响对照，确保多图结果来自可审计独立进程和同期环境，而非修饰旧数据或放宽数值/数据门槛。",
+    "evidence": "重测150真实OS进程实例（140不同整数PID正常），30000名义推理样本，15前后漂移组全部accepted，最大factor1.0485602347<1.10；最大logits误差6.24656677e-05，所有校验passed，summary integrity_errors为空，代码/JSONL SHA一致。M5接口联调另发现缓存ONNX初次export只验证1图，而本轮O0/O1记录已逐张验证64图；将分开审计缓存自身合同与本轮64图证据，不修改旧sidecar或原始数据。最终holdout尚未推理。",
+    "value": "以真实进程生命周期与原始分布验证多模型优化，区分可复用模型产物的来源校验与新工作负载正确性证据，保留原始失败审计轮和透明重测链。"
+  },
+  {
+    "step": "72",
+    "timestamp": "2026-10-02 02:57:58",
+    "title": "查明阶段 B 的中文路径量化失败并隔离原生 ONNX I/O",
+    "module": "Vision/CPU/Quantization",
+    "how": "核对 build/classifier-stage-b 的 family.json，三模型 Q1/Q2/Q3 共9组 failed_runtime；用同一 MobileNetV3-Small QB 对比中文路径与系统 ASCII 临时路径。修改 src/vision/classification_quantization.py：原图哈希验证副本、系统临时目录计算、输出盘内副本哈希验证后 os.replace，family.json 最后发布；增加 tools/test_classifier_quantization.py 的中文源图/输出与副本损坏回归。",
+    "why": "原流程完成不等于 INT8 已执行；拒绝把工程路径异常包装成量化无收益。隔离 C++ infer_shapes_path 的 Windows 中文路径兼容问题，保持全部校准方法、样本数、阈值及选择规则不变。",
+    "evidence": "同一122节点QB：中文路径 FileNotFoundError QB-inferred.onnx；ASCII 路径成功。量化模块35项单测通过；新回归检查原始与发布副本SHA、输出盘内原子替换及完成标记顺序。首轮产物保留，不作INT8结论；其中FP32候选已进行过Holdout，后续必须披露并禁止依据该成绩调参。",
+    "value": "发现并复现跨语言原生文件I/O兼容缺陷，将量化失败与真实性能负结果区分；实现跨盘计算与同盘原子发布及来源完整性验证。"
+  },
+  {
+    "step": "73",
+    "timestamp": "2026-10-02 03:17:43",
+    "title": "真实校准验证路径修复并纠正 INT8 失败结论",
+    "module": "Vision/CPU/Stage-B",
+    "how": "修正 src/vision/classification_stage_b.py 的 int8_evidence_status 与 completed_with_failures 传播，新增阶段B失败/unsupported/部分失败/真实拒绝/合格候选测试。执行项目.venv下量化与阶段B联合95项测试；对真实 MobileNetV3-Small 用256张原校准图生成QB/Q1/Q2/Q3到 build/classifier-quant-native-smoke。更新README重跑目录、Windows临时路径与首轮Holdout访问披露。",
+    "why": "既要修复底层原生路径兼容，也要让报告区分运行错误与有数据支持的负收益；保留原轮而非覆盖，避免根据已访问Holdout改量化参数或采用规则。",
+    "evidence": "联合95项测试OK。真实四方案全部prepared并通过4张开发图输出验证；Q1/Q2/Q3各54个S8 QDQ目标节点。MinMax和Percentile各实际collect_count=256、batch=1，Q1/Q2范围缓存完全一致；Q3真正99.99 percentile。QB=10191383字节，Q1=2740380，Q2=2884582，Q3=2884627；这些仅产物/功能验证，不是正式精度或加速结论。",
+    "value": "建立区分工程失败、平台不支持、证据不全与真实无收益的实验判定链；通过真实数据校准验证静态量化与共享缓存，保持持出数据和候选冻结纪律。"
+  },
+  {
+    "step": "74",
+    "timestamp": "2026-10-02 03:31:18",
+    "title": "完成三模型真实 INT8 开发比较并冻结候选",
+    "module": "Vision/CPU/M5",
+    "how": "在 build/classifier-stage-b-v2 串行重新校准并测量三模型QB/Q1/Q2/Q3，独立worker、固定64图、5块预热20/测量200；父进程检查run.json phase=confirmation 与 frozen.json。未运行并行测试或改动测量代码。",
+    "why": "用真实量化与开发精度/整数核/配对性能证据选方案，消除首轮路径错误造成的伪负结果；最终评估前统一冻结三个模型，禁止Holdout改选。",
+    "evidence": "12个家族变体全部prepared，run failures=0。三模型int8_evidence_status=evaluated_no_benefit、qualified_int8_count=0；冻结均selection_basis=development_only：ResNet18 O1.t4、MobileNetV3-Small O1.t2、ShuffleNetV2 O1.t4。冻结时间2026-10-01T19:27:48.537923+00:00；新独立确认与Holdout评估仍在执行，尚不宣称最终采用。",
+    "value": "完成可追溯的量化消融与多门槛候选筛选，区分有数据支持的拒绝与工程失败，并将开发选择与最终验证隔离。"
+  },
+  {
+    "step": "75",
+    "timestamp": "2026-10-02 03:54:58",
+    "title": "完成 M6 独立确认、最终评估与多模型决策报告交付",
+    "module": "Vision/CPU/Benchmark/Delivery",
+    "how": "完整执行 build/classifier-stage-b-v2，冻结后5块预热20/测量500并评估1000张Holdout；复验285组job/receipt/result哈希、Windows创建时间、JSONL与冻结先后关系，写delivery-audit.json。生成decision-summary.html/json与development描述性Pareto，给完整report/summary加入首轮失败及Holdout访问披露，检查完成标记哈希和Chrome离线页面。运行10组分类/旧入口/YOLO单元模块共300项测试，更新README并git diff --check。",
+    "why": "完成哪种优化适合哪类小模型、代价是什么的可追溯对照：不能把INT8体积压缩等同提速或内存下降，不能把置信不足判成精度通过，也不能把工程失败轮掩盖成真实负收益；最终评估后不追加调参或改选。",
+    "evidence": "Stage B completed，12个QB/Q变体prepared，failures=0。285独立OS进程实例/261整数PID，36,000推理样本；30漂移组accepted，最大因子1.0242386。最终FP32：ResNet18 O1.t4 P50/P95=6.656/9.272ms，配对4.95x；MobileNetV3 O1.t2=1.013/1.266ms，1.25x；ShuffleNetV2 O1.t4=1.794/2.137ms，1.52x。Holdout Top1/Top5=83.4/97.9%、81.4/96.3%、82.9/96.9%，下降均0pp。INT8均未采用：ResNet约1.17x但精度CI跨1pp；Mobile约0.64x且开发精度退化至0（仅四开发图进一步证实关/开图优化同样退化，根因未逐层定位）；Shuffle约0.99x。300项测试OK，报告哈希及离线浏览验证通过；旧工程轮访问过Holdout已公开，不称全新未见集。未训练、接硬件、Git提交或推送。",
+    "value": "构建42唯一配置的多模型消融工具链，将计时/控制/精度/资源观测分开，使用配对进程块统计与跨进程创建时间溯源；交付带Pareto取舍、失败历史和精度不确定性的可信CPU优化决策。"
+  },
+  {
+    "step": "76",
+    "timestamp": "2026-10-10 21:55:32",
+    "title": "板卡重新上线后的 YOLO 优化流程只读预检与 SSH 阻塞取证",
+    "module": "Vision/RKNN/Board-Preflight",
+    "how": "使用BatchMode、有限ConnectTimeout连接既有orangepi@192.168.0.102:22；只读查看Windows网段与缓存邻居，并以StrictHostKeyChecking及旧HostKeyAlias核验192.168.0.101:22。读取Tailscale状态，不打印密钥。审计tools/benchmark_npu_parallel.py、export_rknn.py、include/camera_v4l2.hpp、src/main.cpp及2026-09-20拆分头报告。未登录成功，未启动板端进程或更改代码/模型/硬件。",
+    "why": "用户重新授权板端视觉工作，但板上线不等于SSH可用；先确认可达入口、真实实现与旧模型正确性，不能直接宣称100%NPU、11.8ms、mAP下降1%或四路30FPS。",
+    "evidence": "两地址TCP22均Connection refused，退出255；本机WLAN192.168.0.100，Tailscale仅Windows和Android对端，未见Linux板卡通道。现有三核Python脚本会独立core_mask并发但不校验推理输出；C++src/main.cpp:60-76仍生成dummy检测，camera:24-35使用VideoCapture，未接RKNN/DMA-BUF真实链路。2026-09-20归档拆分INT8 P50=42.4ms、FP16=99.14ms，6张功能验证与三核池可用，不含mAP或完整并发吞吐验证。当前需要用户给出有效SSH命令或启动板端SSH服务。",
+    "value": "以网络分层取证、代码与模型输出证据防止把在线状态、声明注释或历史坏模型吞吐包装成完整硬件优化；在不触发机械臂的条件下确定可复用能力和实现缺口。"
+  },
+  {
+    "step": "77",
+    "timestamp": "2026-10-10 22:33:36",
+    "title": "有界核查板卡备用连接路径并确认需外部连接信息",
+    "module": "Board/SSH/Discovery",
+    "how": "只读运行ssh -G核对实际目标、端口与代理选项；分别用独立解析子进程、每名5秒超时解析orangepi.local、orangepi5pro.local、orangepi5.local。备用登录预设StrictHostKeyChecking和原HostKeyAlias，只对解析出来的地址尝试；修正临时诊断命令末尾嵌套引号错误后完成整个有限流程。未扫描网段、未接受新主机密钥、未修改网络配置或登录板端。",
+    "why": "检查尚未查过的SSH配置重定向与mDNS替代路径，避免只重复旧地址失败；没有可验证入口时不能模拟板端基线或把流程标完成。",
+    "evidence": "effective_ssh user=orangepi hostname=192.168.0.102 port=22，无proxycommand/proxyjump。orangepi.local解析5秒超时，其他两个未解析；候选地址0。更早既有地址及缓存邻居TCP22均拒绝，Tailscale无Linux板卡对端。本解阻诊断完成但原板端身份核验/模型基线仍blocked，等待真实板端IP及SSH监听输出。",
+    "value": "有限时间、严格主机密钥保护的连接发现；把网络可达性与身份认证、模型正确性及性能证据分层，避免无效重试和伪造硬件结果。"
+  },
+  {
+    "step": "78",
+    "timestamp": "2026-10-10 23:22:49",
+    "title": "发现新 DHCP 地址并恢复可信板端连接与真实检测核验",
+    "module": "Board/RKNN/Vision",
+    "how": "限定当前192.168.0.0/24仅探测TCP22，252地址、24并发、每地址0.5s，总5.641s发现192.168.0.103。连接保持StrictHostKeyChecking及原192.168.0.102主机密钥别名，核验orangepi5pro/aarch64/RK3588S OPi5Pro。保存build/board-reconnect-preflight.json，检查源码与模型SHA，发送临时只读六图检测及输入契约诊断脚本到板端解释器stdin，不覆盖板端脏工作区。",
+    "why": "板已上线但DHCP地址改变，不能把旧IP拒绝当成板离线；先以主机密钥识别真实设备，再检查模型输出，防止重复历史坏模型快基准问题。",
+    "evidence": "SSH103通过原密钥校验。Toolkit2=2.3.2/Lite2=2.3.0，实机runtime=2.3.2、driver=0.9.6；NPUfdab0000可见，CPU/NPU仍ondemand未修改。只见video-enc0/video-dec0，无采集相机节点。5个视觉/基准源文件与本地SHA一致，拆分INT8 SHA4a1826...与历史有效模型一致。拆分INT8六图输出全有限、非零，检测12个。FP16 uint8首图出现6个Inf，明确拒绝；单图对照FP32 ONNX的输入诊断改变外部dtype/范围未形成可信FP16检测参考。模型未重建、无精度或100%NPU声明，未运行控制主程序/舵机。当前仅对可用INT8做有限独立进程基线。",
+    "value": "通过有限网络发现与既有主机密钥验证恢复板端工作；把SDK/驱动版本、输入契约、输出有限性与性能分层取证，发现错误输入或FP16参考不可用而不靠静默过滤包装成功。"
+  },
+  {
+    "step": "79",
+    "timestamp": "2026-10-10 23:29:29",
+    "title": "完成有效拆分 INT8 的独立板端单核/三核基线并拒绝无效 FP16 参考",
+    "module": "RKNN/NPU/Baseline",
+    "how": "在192.168.0.103通过原密钥校验执行三次独立Python进程（PID4911/5076/5238），taskset4-7，每核独立RKNNLite上下文绑定CORE0/1/2；每核预热10、测量100，单核与三核块内交替顺序。沿用已校验的CoreWorker，只对计时列表追加完成时间戳，通过预热后barrier到最后完成时间计算稳态吞吐，不计加载/预热/释放。取回三个原始JSON、六图smoke与输入契约诊断，生成build/board-yolo-baseline-summary.json并核验模型/输入SHA和1200正有限计时样本。",
+    "why": "复测当前真实可用模型，而不是继续用旧全零INT8得到快数字；单核/三核系统吞吐、每请求时延和硬件kernel-only时间分开；FP16非有限输出不允许用于速度或精度对照，归一化绕过Inf但检测消失也不算修复。",
+    "evidence": "有效INT8六图全有限非零，共12检测；原始模型SHA4a1826...，准备输入SHA550b0b...三块一致。单核300调用P50/P95=43.219/49.076ms，循环总吞吐22.859FPS；三核900调用=33.360/44.811ms，系统总吞吐83.391FPS（每块81.658~84.994）。配对吞吐比3.594~3.716、几何均值3.648，仅当前ondemand状态探索性结果，非纯NPU并发因果增益。各块前后输出验证通过、原始计时保存。FP16 uint8输入有6Inf；float32归一化输入有限但maxscore0.010895/0检测，不作为有效参考。没有相机采集节点；未验证DMA-BUF、mAP或4路1080p30，未训练、改模型/频率策略/脏源码、启动机械臂或Git提交推送。",
+    "value": "建立含模型/输入指纹、独立进程、原始样本、双向输出校验及清晰计时范围的NPU基线，避免把模型输出错误、启动成本或CPU调频变化包装成硬件优化收益。"
+  },
+  {
+    "step": "80",
+    "timestamp": "2026-10-11 13:53:43",
+    "title": "阶段 1/2 实现与板端初步验证留档，并按用户中断暂停",
+    "module": "Vision/C++/RKNN",
+    "how": "补强tools/export_rknn.py：缺校准硬失败、静态ONNX/input/layout/RGB/std255/参数及产物SHA侧录、默认不覆盖、完成标记发布；12项契约单测通过。加入显式Letterbox与严格transform逆映射，默认resize兼容。新增独立C++edge_yolo_vision、RAII SDK及有界可取消三核队列，CMake视觉专用构建不链接或启动机器人控制。官方SDKv2.3.2 commit42aa1d...头SHA c48e11...固定，板端/tmp/edgeai-yolo-phase12.rweOdP隔离部署编译。实际浮点attr显示AFFINE scale1/zp0，最小兼容严格恒等元数据，输出Inf检查不放宽。用户中断后停止新增构建/推理并把未验收任务标blocked等待新指令。",
+    "why": "先把可运行程序、输入与输出合同、来源和失败传播做真，不把编译成功当运行成功，不将FP16异常或SDK浮点恒等属性错误拒绝混为一谈；不覆盖板端脏仓库和旧模型，不触发机械臂。",
+    "evidence": "Letterbox相关69项离线回归通过；C++166项离线检查、SDK-on语法检查通过，板端真实SDK链接与ctest通过；INT8三核SDK初次推理成功，固定六图resize与letterbox命令均exit0（iterations=6为列表6轮，详细原始报告已取回，尚未完成跨语言/性能资源验收）。同原始ONNX两版FP16（opt3/opt0）导出成功但六图有限性未通过，明确不作为恢复成功；新FP16导出SHA c328b20...，元数据runtime2.3.2/driver0.9.6。旧模型和控制源码保留；未训练、锁频、刷固件、动舵机或Git提交推送。暂停时代理均idle、后台构建已完成，无新硬件作业启动。",
+    "value": "将视觉程序与控制硬件隔离，实施来源/参数/产物追踪、严格数值守卫和有界资源生命周期；实际SDK合同问题经查询证据驱动最小修复，失败和未验收状态如实保留。"
+  },
+  {
+    "step": "81",
+    "timestamp": "2026-10-11 20:07:51",
+    "title": "C++ 验收准备：隔离跨语言组件与 SDK 资源观察器",
+    "module": "Vision/NPU/Acceptance",
+    "how": "核对 C++ 六图原始报告为每种几何模式 36 帧；将现有 Python 预处理和解码模块复制到板端隔离目录；使用官方 2.3.2 头文件以 g++ -std=c++17 -shared -fPIC -Wall -Wextra -Werror 构建透明 init/destroy/outputs_get/release 观察器。",
+    "why": "用真实 SDK 调用收支验证资源释放；观察器不参与性能测量，输出异常注入仅用于明确标注的 UNITTEST，不触碰 FP16 或机械臂链路。",
+    "evidence": "板端 resource-audit.so 编译 exit0；正确入口 cmake-build/bin/edge_yolo_vision --help exit0；初次使用错误可执行文件名返回127，随后通过 spec index 纠正；原始 resize 报告 completed36、failed0、cancelled0。",
+    "value": "建立端侧 C++/Python 一致性与可观察 RAII 生命周期验收，区分诊断测试、真实性能和模型质量证据。"
+  },
+  {
+    "step": "82",
+    "timestamp": "2026-10-11 20:16:37",
+    "title": "修正取消报表验收口径并隔离补齐测试依赖",
+    "module": "Vision/Acceptance/Environment",
+    "how": "保留 cpp-acceptance v1/v2 原始结果；将取消计数改为 worker>=0 的记录对应 queue.pops，全部解码尝试按 ok/failed/cancelled 单独复算；新增每轮 OS PID/argv/源码哈希回执；板端复用 .venv-rknn；本机仅向 build/yolo-cpp-python-deps 安装 opencv-python==4.11.0.86，未修改既有虚拟环境或生产代码。",
+    "why": "消除系统 Python 未装 rknnlite、本机缺 cv2 的环境误报，并避免把排队/背压中取消的解码尝试错误算作已出队任务。",
+    "evidence": "首次板端 ModuleNotFoundError 已保留；v2 六图两种几何均24检测完全一致，SIGINT/SIGTERM/Inf注入 init3=destroy3 且 get=release；旧本机回归381项 errors14 skipped5 来自 cv2 缺失，隔离 wheel 安装 exit0；v3 取消计数核验已通过，完整复跑进行中。",
+    "value": "形成可重演的验收修正链，区分产品缺陷、测试口径错误与环境缺失，保留失败证据而不覆盖结果。"
+  },
+  {
+    "step": "83",
+    "timestamp": "2026-10-11 20:19:47",
+    "title": "INT8 C++ 实板验收通过：跨语言、三核吞吐、取消与资源收支",
+    "module": "Vision/NPU/Acceptance",
+    "how": "在 /tmp/edgeai-yolo-phase12.rweOdP 使用六图分别验证 resize/letterbox；三核每种几何12帧与 Python 对照；资源观察器分别运行正常/SIGINT/SIGTERM/明确UNITTEST Inf注入；未加观察器的单核与三核各3个独立进程，10次/核预热、300计时帧/轮，letterbox 队列容量4，复算所有 P50/P95 与吞吐；采集实际 CMake SDK 库路径与9份源码指纹。",
+    "why": "以相同输入、真实 SDK 和独立进程证据验证 C++ 管线，不把准备好输入的推理基线、CPU后处理、排队延迟和摄像头端到端吞吐混为一谈。",
+    "evidence": "cpp-acceptance-v3 全25项检查通过；两种几何各24检测，框/中心/分数误差均0；单核FPS 22.0282/22.3138/22.0587，三核71.9464/71.9426/71.8679，中位数22.0587→71.9426、3.2614倍；6个PID为14492/14501/14512/14523/14532/14542，共1800计时帧；SIGINT0.2221s、SIGTERM0.2206s退出，三上下文 init=destroy、所有 outputs_get=release；源码无不匹配，真实链接 /lib/librknnrt.so→/usr/lib/librknnrt.so，未使用误写的so2.3.2文件名。",
+    "value": "完成 RK3588S 三核独立上下文有界视觉流水线实测，形成精确跨语言对照、故障注入和资源生命周期审计；收益仅适用于本次文件图像管线，不声称4路1080P30、100%NPU或精度损失≤1%。"
+  },
+  {
+    "step": "84",
+    "timestamp": "2026-10-11 20:26:13",
+    "title": "完成 C++ 相关回归与最终报告交付审计",
+    "module": "Vision/Build/Regression/Delivery",
+    "how": "仅构建板端 edge_yolo_vision 与 test_yolo_vision 目标，执行视觉 CTest；隔离 OpenCV 后重跑15个相关Python测试模块；独立报告审计重新读取12份原始帧报告、逐帧复算P50/P95/吞吐、逐条对照类别ID/框/中心/分数，核验6个PID回执与4份SDK资源账本；生成 build/yolo-cpp-acceptance-report.html 和 final.json，校验7个证据链接，保留v1/v2及FP16原证据。",
+    "why": "把板端功能成功、离线回归、性能时钟口径、资源收支和交付完整性分别闭环；明确暂停和未测内容，不以跳过的真实MLIR、校准图或旧Holdout充当已验证模型精度。",
+    "evidence": "C++ CTest1/1通过，直接运行PASS172 offline checks（不执行RKNN推理）；Python Ran412 tests、OK(skipped=1)，1组真实MLIR因未提供库未执行且属于C++ OpenCV范围外；最终21项独立交付审计全部通过，84份原始产物记录SHA256，HTML7链接全部有效，git diff --check通过（仅既有CRLF提示）；此前Holdout访问披露保留，当前C++未读取Holdout。",
+    "value": "交付可复核、可重演的RK3588S C++视觉验收包，具备模型/源码/SDK/输入指纹、独立进程回执、取消与故障注入证据、跨语言零误差对照及诚实范围声明；FP16、4路1080P30、DMA-BUF和≤1%精度声明仍未验收。"
+  },
+  {
+    "step": "85",
+    "timestamp": "2026-10-11 20:37:11",
+    "title": "用户授权 GitHub 发布：整理已验证开发成果并完成提交前检查",
+    "module": "Git/Delivery",
+    "how": "按用户先推到GitHub的最新指令，读取status/diff/log，fetch origin并核验HEAD与origin/main无分歧；确认公共仓库kimkingyu/EdgeAI-Robotic-Arm-Control及kimkingyu有效登录；逐文件选择分类器阶段A/B、YOLO导出/Letterbox/C++实现、测试、配置、项目内追踪器和开发日志，不暂存模型、数据、build产物、计划或凭据。",
+    "why": "发布此前完成且验证的开发成果，覆盖此前不提交推送的阶段性限制；保持普通推送，不覆盖远端或丢弃工作区修改。",
+    "evidence": "fetch后HEAD...origin/main为0/0；GitHub默认main，认证成功；相关源码/工具/追踪器/开发日志常见密钥模式扫描无命中，git diff --check通过；最近完成C++172离线检查、实板25项和Python412项回归OK(真实MLIR1组未执行)。当前仅完成提交前核验，尚未宣称推送成功。",
+    "value": "以可追溯验收证据发布边缘视觉与分类优化代码，执行明确暂存、敏感产物排除和非破坏性远端同步。"
+  },
+  {
+    "step": "86",
+    "timestamp": "2026-10-11 20:39:25",
+    "title": "修复暂存范围新增文件的行尾空格并核验语义不变",
+    "module": "Git/Style",
+    "how": "首次git diff --cached --check发现新纳入版本控制的classification_stage_b.py第67行尾随空格；仅删除该空格，用ast.parse/ast.dump比较暂存旧内容与当前内容，然后重新暂存。",
+    "why": "未跟踪文件不会进入先前普通git diff --check，因此在提交前扩大格式核验范围；保持实验逻辑、门槛与既有失败证据不变，不改写冻结实验的原来源哈希。",
+    "evidence": "初次暂存检查退出码2并明确报第67行trailing whitespace；修正后WHITESPACE_FIX_AST_UNCHANGED=True，仅空白变化；此前412项回归与172项C++检查结果仍保留。",
+    "value": "将暂存区作为发布前最终质量边界，对纯格式修复证明AST语义等价，避免修改已冻结实验事实。"
   }
 ]

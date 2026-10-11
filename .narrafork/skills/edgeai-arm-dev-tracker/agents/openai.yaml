@@ -1,0 +1,4 @@
+interface:
+  display_name: "EdgeAI机械臂研发追踪器"
+  short_description: "记录机械臂开发步骤、怎么做的、为了什么及简历亮点"
+  default_prompt: "帮我记录当前EdgeAI机械臂的开发步骤、实现细节和工程意图"

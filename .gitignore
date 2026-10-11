@@ -1,4 +1,5 @@
-.narrafork/
+/.narrafork/*
+!/.narrafork/skills/
 .worktrees/
 
 # Python

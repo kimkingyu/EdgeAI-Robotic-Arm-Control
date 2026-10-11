@@ -25,7 +25,7 @@ class RKNNObjectDetector:
 
     def __init__(self, model_path: str, target_size=(640, 640), conf_thresh=0.5, nms_thresh=0.45,
                  preprocess_backend: str = "opencv", preprocess_library=None,
-                 preprocess_manifest=None):
+                 preprocess_manifest=None, geometry: str = "resize"):
         self.model_path = model_path
         self.target_size = target_size
         self.conf_thresh = conf_thresh
@@ -37,6 +37,7 @@ class RKNNObjectDetector:
             "backend": preprocess_backend,
             "library": preprocess_library,
             "manifest": preprocess_manifest,
+            "geometry": geometry,
         }
         self._preprocessor = None
 
@@ -77,11 +78,12 @@ class RKNNObjectDetector:
                 output_size=(height, width),
                 backend=self._preprocess_config["backend"],
                 library=self._preprocess_config["library"],
-                manifest=self._preprocess_config["manifest"])
+                manifest=self._preprocess_config["manifest"],
+                geometry=self._preprocess_config["geometry"])
         return self._preprocessor
 
     def preprocess(self, img: Any) -> Any:
-        """缩放到网络输入尺寸并转 RGB；不做 letterbox、不做归一化。"""
+        """按显式几何模式缩放并转 RGB；默认 resize，不做归一化。"""
         if img is None:
             return img
         return self.preprocessor.run(img)
@@ -100,22 +102,24 @@ class RKNNObjectDetector:
                 "center": (int(w * 0.5), int(h * 0.5))
             }]
 
-        input_data = self.preprocessor.run_batch1(frame)
+        rgb, transform = self.preprocessor.run_with_transform(frame)
+        input_data = np.expand_dims(rgb, 0)
 
         # 送入 NPU 执行推理
         outputs = self.rknn.inference(inputs=[input_data])
 
         # 此处根据具体检测模型（如 YOLOv8/YOLOv5/RT-DETR）进行后处理解码
         # 后续接入实际 .rknn 权重时填入对应解码逻辑
-        detections = self._postprocess(outputs, frame.shape)
+        detections = self._postprocess(outputs, frame.shape, transform=transform)
         return detections
 
-    def _postprocess(self, outputs, orig_shape) -> List[Dict[str, Any]]:
+    def _postprocess(self, outputs, orig_shape, transform=None) -> List[Dict[str, Any]]:
         """解码检测头输出。布局异常时抛错，不返回空列表冒充"图里没东西"。"""
         from src.vision.yolo_postprocess import decode
         width, height = self.target_size
         return decode(outputs, orig_shape, input_size=(height, width),
-                      conf_thresh=self.conf_thresh, nms_thresh=self.nms_thresh)
+                      conf_thresh=self.conf_thresh, nms_thresh=self.nms_thresh,
+                      transform=transform)
 
     def release(self):
         if self._preprocessor is not None:

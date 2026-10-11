@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "models": ["resnet18", "mobilenet_v3_small", "shufflenet_v2_x1_0"],
+  "weights_version": "IMAGENET1K_V1",
+  "variants": ["B0", "F1", "L1", "FL1", "O0", "O1"],
+  "baseline_threads": 1,
+  "thread_sweep": [1, 2, 4],
+  "thread_sweep_variants": ["B0", "O1"],
+  "inter_op_threads": 1,
+  "batch_size": 1,
+  "dtype": "float32",
+  "device": "cpu",
+  "seed": 20261001,
+  "rtol": 0.0001,
+  "atol": 0.0001,
+  "worker_timeout_s": 300,
+  "smoke": {"warmup": 3, "iterations": 10, "repeats": 2},
+  "formal": {"warmup": 20, "iterations": 200, "repeats": 5},
+  "dataset_requirements": {
+    "development": 128,
+    "performance": 64,
+    "calibration": 256,
+    "holdout": 1000
+  },
+  "ort": {
+    "providers": ["CPUExecutionProvider"],
+    "execution_mode": "sequential",
+    "intra_op_spinning": false,
+    "inter_op_spinning": false
+  },
+  "adoption": {"min_speedup": 1.05, "max_p95_ratio": 1.05, "min_ci_lower": 1.0},
+  "quantization_accuracy_budget_pp": {"top1": 1.0, "top5": 1.0}
+}

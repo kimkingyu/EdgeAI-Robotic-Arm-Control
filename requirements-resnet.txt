@@ -1,0 +1,9 @@
+# Optional CPU demo environment; do not install into the board's RKNN environment.
+# Verified with Python 3.12 on Windows. CPU-only PyTorch wheels use the official index.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.0+cpu
+torchvision==0.29.0+cpu
+numpy==2.5.2
+Pillow==12.3.0
+onnx==1.23.1
+onnxruntime==1.30.0

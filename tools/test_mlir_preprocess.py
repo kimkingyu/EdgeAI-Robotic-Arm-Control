@@ -14,6 +14,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -34,7 +35,7 @@ REQUIRE_MLIR = os.environ.get("EDGEAI_REQUIRE_MLIR") == "1"
 
 
 def bgr_fixture(height, width, seed=7):
-    """合成图案只作正确性 fixture，不是性能或模型证据。"""
+    """UNITTEST 合成图案只作正确性 fixture，不是性能或模型证据。"""
     rng = np.random.default_rng(seed)
     return np.ascontiguousarray(rng.integers(0, 256, (height, width, 3), dtype=np.uint8))
 
@@ -124,6 +125,22 @@ class BackendSelectionTests(unittest.TestCase):
         for size in ((0, 32), (32, 0), (9000, 32), (-1, 4)):
             with self.subTest(size=size), self.assertRaises(ValueError):
                 Preprocessor(output_size=size)
+
+    def test_explicit_mlir_letterbox_rejected_before_library_loading(self):
+        # UNITTEST：不需要真实产物库；unsupported geometry 不能触发任何载库/回退。
+        with mock.patch("src.vision.preprocess.MlirBackend") as backend:
+            for library in (None, "UNITTEST-absent-library.so"):
+                with self.subTest(library=library), \
+                        self.assertRaisesRegex(UnsupportedInput, "MLIR.*letterbox"):
+                    Preprocessor((8, 8), backend="mlir", library=library, geometry="letterbox")
+            backend.assert_not_called()
+
+    def test_config_mlir_letterbox_is_explicitly_unsupported(self):
+        for libraries in ({}, {"640x640": "UNITTEST-absent-library.so"}):
+            with self.subTest(libraries=libraries), \
+                    self.assertRaisesRegex(UnsupportedInput, "MLIR.*letterbox"):
+                from_config({"preprocess": {"backend": "mlir", "geometry": "letterbox",
+                                            "libraries": libraries}}, (8, 8))
 
     def test_explicit_mlir_failures_are_loud(self):
         """缺库/错路径必须报错，不能静默退回 OpenCV 后还报 MLIR 耗时。"""
